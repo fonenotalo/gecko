@@ -381,6 +381,8 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
     private fun parseBrowsePage(root: JSONObject): BrowsePage {
         val title = browseTitle(root)
         val tracks = parseTracks(root)
+        val twoRowTracks = collectObjects(root, "musicTwoRowItemRenderer")
+            .mapNotNull(::parseTwoRowTrack)
         val items = (collectObjects(root, "musicResponsiveListItemRenderer")
             .mapNotNull(::parseResponsiveBrowseItem) +
             collectObjects(root, "musicTwoRowItemRenderer").mapNotNull(::parseTwoRowBrowseItem))
@@ -389,7 +391,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         return BrowsePage(
             title = title,
             subtitle = browseSubtitle(root),
-            tracks = tracks.distinctBy { it.remoteId },
+            tracks = (tracks + twoRowTracks).distinctBy { it.remoteId },
             items = items.take(60),
         )
     }
@@ -453,6 +455,27 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
             kind = kind,
             pageType = pageType,
             artworkUrl = thumbnailUrl(item),
+        )
+    }
+
+    private fun parseTwoRowTrack(item: JSONObject): Track? {
+        val watch = item.optJSONObject("navigationEndpoint")
+            ?.optJSONObject("watchEndpoint")
+            ?: return null
+        val videoId = watch.optString("videoId").trim()
+        if (videoId.isBlank()) return null
+        val title = runText(textRuns(item.optJSONObject("title"))).trim()
+            .ifBlank { return null }
+        val artist = runText(textRuns(item.optJSONObject("subtitle"))).trim()
+        return Track(
+            id = "yt:$videoId",
+            title = title,
+            artist = artist,
+            album = "",
+            durationMs = 0L,
+            artworkUrl = thumbnailUrl(item),
+            source = TrackSource.YOUTUBE_MUSIC,
+            remoteId = videoId,
         )
     }
 

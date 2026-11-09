@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -51,6 +52,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,9 +70,12 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.gecko.app.model.AppSettings
 import com.gecko.app.model.Track
+import com.gecko.app.sources.YouTubeMusicApi
 import com.gecko.app.ui.LibraryState
 import com.gecko.app.ui.LocalAppContainer
 import com.gecko.app.ui.PlayerUiState
+import com.gecko.app.ui.RecommendedState
+import com.gecko.app.ui.components.ArtworkImage
 import com.gecko.app.ui.components.GeckoCard
 import com.gecko.app.ui.components.EmptyState
 import com.gecko.app.ui.components.InfoBanner
@@ -88,6 +93,7 @@ fun HomeScreen(
     player: PlayerUiState,
     settings: AppSettings,
     pluginCount: Int,
+    recommendations: RecommendedState,
     onPlayTrack: (Track, List<Track>) -> Unit,
     onStartMix: () -> Unit,
     onShuffleAll: () -> Unit,
@@ -100,6 +106,8 @@ fun HomeScreen(
     onGenerateDemo: () -> Unit,
     onRefresh: () -> Unit,
     onDownloadTrack: (Track) -> Unit,
+    onLoadRecommendations: () -> Unit,
+    onOpenBrowse: (YouTubeMusicApi.BrowseItem) -> Unit,
     onPlayNext: (Track) -> Unit,
     onAddToQueue: (Track) -> Unit,
 ) {
@@ -110,6 +118,7 @@ fun HomeScreen(
     ) { onRefresh() }
 
     val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    LaunchedEffect(Unit) { onLoadRecommendations() }
 
     LazyColumn(
         modifier = Modifier
@@ -203,6 +212,81 @@ fun HomeScreen(
                             onClick = { onPlayTrack(track, library.recent) },
                         )
                     }
+                }
+            }
+        }
+
+        if (recommendations.loading || recommendations.tracks.isNotEmpty() || recommendations.browseItems.isNotEmpty() || recommendations.error != null) {
+            item {
+                SectionHeader(title = "Recomendado no YouTube Music")
+            }
+            item {
+                when {
+                    recommendations.loading && recommendations.tracks.isEmpty() && recommendations.browseItems.isEmpty() -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(88.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                    recommendations.tracks.isNotEmpty() -> {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            items(recommendations.tracks, key = { it.id }) { track ->
+                                RecentCard(
+                                    track = track,
+                                    isPlaying = player.current?.id == track.id && player.snapshot.isPlaying,
+                                    onClick = { onPlayTrack(track, recommendations.tracks) },
+                                )
+                            }
+                        }
+                    }
+                    recommendations.browseItems.isNotEmpty() -> {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            items(recommendations.browseItems, key = { it.browseId }) { browseItem ->
+                                YouTubeRecommendationBrowseCard(
+                                    item = browseItem,
+                                    onClick = {
+                                        onOpenBrowse(browseItem)
+                                        onOpenLibrary()
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    recommendations.error != null -> {
+                        Text(
+                            text = recommendations.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            if (recommendations.browseItems.isNotEmpty() && !recommendations.loading && recommendations.tracks.isNotEmpty()) {
+                item {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(recommendations.browseItems, key = { it.browseId }) { browseItem ->
+                            YouTubeRecommendationBrowseCard(
+                                item = browseItem,
+                                onClick = {
+                                    onOpenBrowse(browseItem)
+                                    onOpenLibrary()
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+            if (recommendations.seedTitle != null && recommendations.tracks.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "A partir de “${recommendations.seedTitle}”",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -591,6 +675,51 @@ private fun RecentCard(track: Track, isPlaying: Boolean, onClick: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun YouTubeRecommendationBrowseCard(
+    item: YouTubeMusicApi.BrowseItem,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .width(142.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(2.dp),
+    ) {
+        ArtworkImage(
+            uri = item.artworkUrl?.let(Uri::parse),
+            seed = item.title + item.subtitle,
+            contentDescription = "Abrir ${item.title}",
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f),
+            corner = 16,
+        )
+        Spacer(Modifier.height(7.dp))
+        Text(
+            text = item.title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = item.subtitle.ifBlank { item.kind.label },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = item.kind.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
         )
     }
 }

@@ -75,6 +75,14 @@ data class BrowseDetailState(
     val error: String? = null,
 )
 
+data class RecommendedState(
+    val tracks: List<Track> = emptyList(),
+    val browseItems: List<YouTubeMusicApi.BrowseItem> = emptyList(),
+    val loading: Boolean = false,
+    val error: String? = null,
+    val seedTitle: String? = null,
+)
+
 data class PlayerUiState(
     val snapshot: PlayerSnapshot = PlayerSnapshot(),
     val current: Track? = null,
@@ -116,6 +124,8 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
     private val _infiniteMix = MutableStateFlow(false)
     private val _browseDetail = MutableStateFlow<BrowseDetailState?>(null)
     val browseDetail: StateFlow<BrowseDetailState?> = _browseDetail.asStateFlow()
+    private val _recommended = MutableStateFlow(RecommendedState())
+    val recommended: StateFlow<RecommendedState> = _recommended.asStateFlow()
 
     private val lyricsState = combine(_lyrics, _lyricsLoading, _lyricsError) { lyrics, loading, error ->
         Triple(lyrics, loading, error)
@@ -152,6 +162,7 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
     private var searchJob: Job? = null
     private var suggestionsJob: Job? = null
     private var browseJob: Job? = null
+    private var recommendationsJob: Job? = null
     private var lyricsJob: Job? = null
     private var paletteJob: Job? = null
     private var appendingMix = false
@@ -443,6 +454,49 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
     fun toggleShuffle() = container.player.toggleShuffle()
     fun cycleRepeat() = container.player.cycleRepeat()
     fun stop() = container.player.stop()
+
+    fun loadYouTubeRecommendations(force: Boolean = false) {
+        if (_recommended.value.loading) return
+        if (!force && (_recommended.value.tracks.isNotEmpty() || _recommended.value.browseItems.isNotEmpty())) {
+            return
+        }
+        recommendationsJob?.cancel()
+        _recommended.value = RecommendedState(loading = true)
+        recommendationsJob = viewModelScope.launch {
+            val currentSettings = settings.value
+            val apiUrl = currentSettings.ytMusicUrl.trim()
+            if (!YouTubeMusicApi.isDirectApi(apiUrl)) {
+                _recommended.value = RecommendedState(
+                    error = "Use a API direta do YouTube Music para ver recomendações.",
+                )
+                return@launch
+            }
+
+            val home = runCatching {
+                container.youTubeMusicApi.browse(apiUrl, "FEmusic_home")
+            }.getOrNull()
+            val seed = player.value.current
+                ?.takeIf { it.source == TrackSource.YOUTUBE_MUSIC }
+                ?: library.value.recent.firstOrNull { it.source == TrackSource.YOUTUBE_MUSIC }
+                ?: library.value.tracks.firstOrNull { it.source == TrackSource.YOUTUBE_MUSIC }
+            val personalized = seed?.let { remoteNextTracks(it, currentSettings, 20) }.orEmpty()
+            val tracks = (personalized + home?.tracks.orEmpty())
+                .distinctBy { it.remoteId }
+                .take(24)
+            val browseItems = home?.items.orEmpty()
+            val hasResults = tracks.isNotEmpty() || browseItems.isNotEmpty()
+            _recommended.value = RecommendedState(
+                tracks = tracks,
+                browseItems = browseItems,
+                seedTitle = seed?.title,
+                error = if (hasResults) {
+                    null
+                } else {
+                    "Nenhuma recomendação do YouTube Music retornou desta vez."
+                },
+            )
+        }
+    }
 
     fun openYouTubeBrowse(item: YouTubeMusicApi.BrowseItem) {
         if (item.browseId.isBlank()) return

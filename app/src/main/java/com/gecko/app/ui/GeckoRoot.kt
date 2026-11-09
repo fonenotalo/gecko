@@ -51,6 +51,7 @@ fun GeckoRoot(viewModel: GeckoViewModel) {
     val plugins by viewModel.plugins.collectAsStateWithLifecycle()
     val search by viewModel.search.collectAsStateWithLifecycle()
     val browseDetail by viewModel.browseDetail.collectAsStateWithLifecycle()
+    val recommended by viewModel.recommended.collectAsStateWithLifecycle()
     val bridgeStatus by viewModel.bridgeStatus.collectAsStateWithLifecycle()
 
     val navController = rememberNavController()
@@ -112,6 +113,7 @@ fun GeckoRoot(viewModel: GeckoViewModel) {
                     plugins = plugins,
                     search = search,
                     browseDetail = browseDetail,
+                    recommended = recommended,
                     bridgeStatus = bridgeStatus,
                     innerPadding = innerPadding,
                 )
@@ -131,6 +133,7 @@ private fun GeckoNavHost(
     plugins: List<SourcePlugin>,
     search: SearchState,
     browseDetail: BrowseDetailState?,
+    recommended: RecommendedState,
     bridgeStatus: BridgeStatus,
     innerPadding: PaddingValues,
 ) {
@@ -147,6 +150,7 @@ private fun GeckoNavHost(
                 player = player,
                 settings = settings,
                 pluginCount = plugins.size,
+                recommendations = recommended,
                 onPlayTrack = { track, queue -> viewModel.playTrack(track, queue) },
                 onStartMix = { viewModel.startInfiniteMix() },
                 onShuffleAll = viewModel::shuffleAll,
@@ -161,6 +165,8 @@ private fun GeckoNavHost(
                 onGenerateDemo = viewModel::generateDemo,
                 onRefresh = viewModel::refreshLibrary,
                 onDownloadTrack = viewModel::downloadTrack,
+                onLoadRecommendations = { viewModel.loadYouTubeRecommendations() },
+                onOpenBrowse = viewModel::openYouTubeBrowse,
                 onPlayNext = viewModel::playNext,
                 onAddToQueue = viewModel::addToQueue,
             )
