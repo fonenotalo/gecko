@@ -248,7 +248,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         endpoint: String,
         extra: JSONObject,
     ): JSONObject? {
-        val current = config()
+        val current = config(baseUrl)
         val payload = JSONObject().apply {
             put("context", contextJson(current, "WEB_REMIX"))
             val keys = extra.keys()
@@ -267,7 +267,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         clientName: String,
         clientVersion: String,
     ): JSONObject? {
-        val current = config()
+        val current = config(baseUrl)
         val version = clientVersion.takeIf { it.isNotBlank() } ?: current.version
         val payload = JSONObject().apply {
             put("context", contextJson(current.copy(version = version), clientName))
@@ -331,7 +331,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         }.getOrNull()
     }
 
-    private suspend fun config(): ApiConfig {
+    private suspend fun config(baseUrl: String): ApiConfig {
         val cached = config
         if (cached != null && System.currentTimeMillis() - cached.fetchedAt < CONFIG_TTL_MS) {
             return cached
@@ -341,12 +341,12 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
             if (latest != null && System.currentTimeMillis() - latest.fetchedAt < CONFIG_TTL_MS) {
                 latest
             } else {
-                discoverConfig().also { config = it }
+                discoverConfig(baseUrl).also { config = it }
             }
         }
     }
 
-    private suspend fun discoverConfig(): ApiConfig = withContext(Dispatchers.IO) {
+    private suspend fun discoverConfig(baseUrl: String): ApiConfig = withContext(Dispatchers.IO) {
         val fallback = ApiConfig(
             key = FALLBACK_API_KEY,
             version = FALLBACK_CLIENT_VERSION,
@@ -354,9 +354,11 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
             poToken = "",
             fetchedAt = System.currentTimeMillis(),
         )
+        // Tenta descobrir a chave na URL configurada pelo usuário (mesmo endpoint do player/search)
+        val discoveryUrl = endpointUrl(baseUrl, "search", FALLBACK_API_KEY)
         val html = runCatching {
             val request = Request.Builder()
-                .url(HOME_URL)
+                .url(discoveryUrl)
                 .header("User-Agent", WEB_USER_AGENT)
                 .header("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8")
                 .build()
