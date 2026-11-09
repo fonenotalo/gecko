@@ -14,6 +14,7 @@ import com.gecko.app.integrations.DiscordPresenceClient
 import com.gecko.app.integrations.LastFmClient
 import com.gecko.app.playback.PlayerController
 import com.gecko.app.sources.PluginRepository
+import com.gecko.app.sources.YouTubeMusicApi
 import com.gecko.app.sources.YouTubeMusicBridge
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -35,6 +36,7 @@ class AppContainer(private val app: Application) {
     val downloads = DownloadRepository(app, httpClient)
     val recent = RecentStore(app)
     val plugins = PluginRepository(app, httpClient)
+    val youTubeMusicApi = YouTubeMusicApi(httpClient)
     val youTubeMusic = YouTubeMusicBridge(httpClient)
     val player = PlayerController(app)
     val lastFm = LastFmClient(app, httpClient)

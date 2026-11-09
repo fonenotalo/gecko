@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.gecko.app.model.AppSettings
 import com.gecko.app.model.AudioQuality
+import com.gecko.app.model.DEFAULT_YT_MUSIC_API
 import com.gecko.app.model.ThemeMode
 import com.gecko.app.model.ThemeStyle
 import kotlinx.coroutines.flow.Flow
@@ -33,31 +34,52 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    private fun Preferences.toAppSettings(): AppSettings = AppSettings(
-        themeMode = this[Keys.THEME_MODE]?.let { stored ->
-            ThemeMode.entries.firstOrNull { it.name == stored }
-        } ?: ThemeMode.SYSTEM,
-        themeStyle = this[Keys.THEME_STYLE]?.let { stored ->
-            ThemeStyle.entries.firstOrNull { it.name == stored }
-        } ?: ThemeStyle.MODERN,
-        colorFromArtwork = this[Keys.COLOR_FROM_ART] ?: true,
-        preferredQuality = AudioQuality.fromStorage(this[Keys.PREFERRED_QUALITY]),
-        losslessFirst = this[Keys.LOSSLESS_FIRST] ?: true,
-        streamWhenOnline = this[Keys.STREAM_WHEN_ONLINE] ?: true,
-        smartDownloads = this[Keys.SMART_DOWNLOADS] ?: true,
-        wifiOnlyDownloads = this[Keys.WIFI_ONLY_DOWNLOADS] ?: true,
-        downloadQuality = AudioQuality.fromStorage(this[Keys.DOWNLOAD_QUALITY]).let {
-            if (it.rank < AudioQuality.LOSSLESS.rank) AudioQuality.LOSSLESS else it
-        },
-        ytMusicUrl = this[Keys.YT_MUSIC_URL].orEmpty(),
-        ytMusicToken = this[Keys.YT_MUSIC_TOKEN].orEmpty(),
-        scrobbleEnabled = this[Keys.SCROBBLE_ENABLED] ?: false,
-        lastFmApiKey = this[Keys.LASTFM_API_KEY].orEmpty(),
-        lastFmApiSecret = this[Keys.LASTFM_API_SECRET].orEmpty(),
-        lastFmSessionKey = this[Keys.LASTFM_SESSION_KEY].orEmpty(),
-        discordEnabled = this[Keys.DISCORD_ENABLED] ?: false,
-        discordBridgeUrl = this[Keys.DISCORD_BRIDGE_URL].orEmpty(),
-    )
+    private fun Preferences.toAppSettings(): AppSettings {
+        val storedApi = this[Keys.YT_MUSIC_URL].orEmpty().trim()
+        val storedStream = this[Keys.YT_MUSIC_STREAM_URL].orEmpty().trim()
+        val storedWasBridge = storedApi.isNotBlank() && !storedApi.isDirectYouTubeMusicApi()
+        val apiUrl = if (storedApi.isBlank() || storedWasBridge) {
+            DEFAULT_YT_MUSIC_API
+        } else {
+            storedApi
+        }
+        val streamUrl = when {
+            storedWasBridge -> storedApi
+            storedStream.isNotBlank() -> storedStream
+            else -> ""
+        }
+        return AppSettings(
+            themeMode = this[Keys.THEME_MODE]?.let { stored ->
+                ThemeMode.entries.firstOrNull { it.name == stored }
+            } ?: ThemeMode.SYSTEM,
+            themeStyle = this[Keys.THEME_STYLE]?.let { stored ->
+                ThemeStyle.entries.firstOrNull { it.name == stored }
+            } ?: ThemeStyle.MODERN,
+            colorFromArtwork = this[Keys.COLOR_FROM_ART] ?: true,
+            preferredQuality = AudioQuality.fromStorage(this[Keys.PREFERRED_QUALITY]),
+            losslessFirst = this[Keys.LOSSLESS_FIRST] ?: true,
+            streamWhenOnline = this[Keys.STREAM_WHEN_ONLINE] ?: true,
+            smartDownloads = this[Keys.SMART_DOWNLOADS] ?: true,
+            wifiOnlyDownloads = this[Keys.WIFI_ONLY_DOWNLOADS] ?: true,
+            downloadQuality = AudioQuality.fromStorage(this[Keys.DOWNLOAD_QUALITY]).let {
+                if (it.rank < AudioQuality.LOSSLESS.rank) AudioQuality.LOSSLESS else it
+            },
+            ytMusicUrl = apiUrl,
+            ytMusicStreamUrl = streamUrl,
+            ytMusicToken = this[Keys.YT_MUSIC_TOKEN].orEmpty(),
+            scrobbleEnabled = this[Keys.SCROBBLE_ENABLED] ?: false,
+            lastFmApiKey = this[Keys.LASTFM_API_KEY].orEmpty(),
+            lastFmApiSecret = this[Keys.LASTFM_API_SECRET].orEmpty(),
+            lastFmSessionKey = this[Keys.LASTFM_SESSION_KEY].orEmpty(),
+            discordEnabled = this[Keys.DISCORD_ENABLED] ?: false,
+            discordBridgeUrl = this[Keys.DISCORD_BRIDGE_URL].orEmpty(),
+        )
+    }
+
+    private fun String.isDirectYouTubeMusicApi(): Boolean =
+        contains("/youtubei/v1", ignoreCase = true) ||
+            contains("music.youtube.com", ignoreCase = true) ||
+            contains("youtubei", ignoreCase = true)
 
     private fun androidx.datastore.preferences.core.MutablePreferences.writeSettings(settings: AppSettings) {
         this[Keys.THEME_MODE] = settings.themeMode.name
@@ -70,6 +92,7 @@ class SettingsRepository(private val context: Context) {
         this[Keys.WIFI_ONLY_DOWNLOADS] = settings.wifiOnlyDownloads
         this[Keys.DOWNLOAD_QUALITY] = settings.downloadQuality.storageKey
         this[Keys.YT_MUSIC_URL] = settings.ytMusicUrl
+        this[Keys.YT_MUSIC_STREAM_URL] = settings.ytMusicStreamUrl
         this[Keys.YT_MUSIC_TOKEN] = settings.ytMusicToken
         this[Keys.SCROBBLE_ENABLED] = settings.scrobbleEnabled
         this[Keys.LASTFM_API_KEY] = settings.lastFmApiKey
@@ -90,6 +113,7 @@ class SettingsRepository(private val context: Context) {
         val WIFI_ONLY_DOWNLOADS = booleanPreferencesKey("wifi_only_downloads")
         val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
         val YT_MUSIC_URL = stringPreferencesKey("yt_music_url")
+        val YT_MUSIC_STREAM_URL = stringPreferencesKey("yt_music_stream_url")
         val YT_MUSIC_TOKEN = stringPreferencesKey("yt_music_token")
         val SCROBBLE_ENABLED = booleanPreferencesKey("scrobble_enabled")
         val LASTFM_API_KEY = stringPreferencesKey("lastfm_api_key")

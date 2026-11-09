@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.gecko.app.BuildConfig
 import com.gecko.app.model.AppSettings
+import com.gecko.app.model.DEFAULT_YT_MUSIC_API
 import com.gecko.app.model.ThemeMode
 import com.gecko.app.model.ThemeStyle
 import com.gecko.app.sources.SourcePlugin
@@ -240,23 +241,34 @@ fun SettingsScreen(
             SettingsGroup(title = "YouTube Music") {
                 Box(Modifier.padding(14.dp)) {
                     InfoBanner(
-                        text = "Integração opcional. O Gecko não faz scraping nem contorna DRM: " +
-                            "a reprodução vem de uma ponte auto-hospedada que você controla, com " +
-                            "conteúdo autorizado na sua região.",
+                        text = "A API pública do YouTube Music é a fonte padrão para busca, " +
+                            "sugestões e recomendações. O Gecko não contorna DRM: quando o " +
+                            "YouTube não libera o stream, a reprodução usa a ponte opcional " +
+                            "que você configurar, com conteúdo autorizado na sua região.",
                         tone = MaterialTheme.colorScheme.primary,
                     )
                 }
                 SettingTextField(
-                    title = "URL da ponte",
+                    title = "API do YouTube Music",
                     value = settings.ytMusicUrl,
-                    placeholder = "http://127.0.0.1:8080",
+                    placeholder = DEFAULT_YT_MUSIC_API,
                     onChange = { value ->
                         onUpdate { it.copy(ytMusicUrl = value.trim()) }
                     },
-                    helper = "Exemplo de contrato: /api/health, /api/search e /api/stream.",
+                    helper = "Base do InnerTube: search, browse, player, next, fila e sugestões.",
                 )
                 SettingTextField(
-                    title = "Token de acesso (opcional)",
+                    title = "Ponte de reprodução (opcional)",
+                    value = settings.ytMusicStreamUrl,
+                    placeholder = "http://127.0.0.1:8080",
+                    onChange = { value ->
+                        onUpdate { it.copy(ytMusicStreamUrl = value.trim()) }
+                    },
+                    helper = "Usada quando o player direto não devolve uma URL de áudio. " +
+                        "Contrato: /api/health, /api/search e /api/stream.",
+                )
+                SettingTextField(
+                    title = "Token da ponte (opcional)",
                     value = settings.ytMusicToken,
                     placeholder = "Enviado como Bearer e X-API-Key",
                     onChange = { value ->
@@ -289,7 +301,8 @@ fun SettingsScreen(
                     } else {
                         TextButton(
                             onClick = onTestYouTubeMusic,
-                            enabled = settings.ytMusicUrl.isNotBlank(),
+                            enabled = settings.ytMusicUrl.isNotBlank() ||
+                                settings.ytMusicStreamUrl.isNotBlank(),
                         ) {
                             Icon(Icons.Rounded.Link, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(5.dp))

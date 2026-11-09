@@ -2,7 +2,7 @@
 
 Player de música Android feito em Kotlin + Jetpack Compose. Interface limpa, tela de reprodução com a arte em destaque, cores tiradas da capa, temas claro/escuro e navegação pensada para uso com uma mão.
 
-Gecko toca a sua biblioteca local, aceita fontes lossless adicionais por complementos e pode conversar com uma ponte auto-hospedada de YouTube Music. Não tem anúncios, não exige conta e não envia suas músicas locais para lugar nenhum.
+Gecko toca a sua biblioteca local, aceita fontes lossless adicionais por complementos e usa a API pública do YouTube Music para busca, sugestões e recomendações. Não tem anúncios, não exige conta e não envia suas músicas locais para lugar nenhum.
 
 > **Status:** projeto em desenvolvimento. O APK de depuração é gerado pelo workflow do GitHub Actions; não há build assinado de produção.
 
@@ -21,11 +21,18 @@ Gecko toca a sua biblioteca local, aceita fontes lossless adicionais por complem
 
 ## Integrações opcionais
 
-Todas as integrações abaixo são desligadas por padrão e ficam sob seu controle. O Gecko é o cliente: ele não hospeda catálogo, não faz scraping e não contorna DRM.
+As integrações de conta e as pontes opcionais ficam desligadas por padrão e sob seu controle. O Gecko é o cliente: ele não hospeda catálogo, não faz scraping e não contorna DRM.
 
-### YouTube Music (ponte auto-hospedada)
+### YouTube Music (API pública + ponte opcional)
 
-Configure a URL e, se quiser, um token em **Ajustes → YouTube Music**. A ponte precisa expor:
+A fonte remota padrão é a API pública do YouTube Music em `https://music.youtube.com/youtubei/v1/`. O Gecko usa os endpoints `search`, `browse`, `player`, `next`, `music/get_queue` e `music/get_search_suggestions` para busca, sugestões, metadados, fila e recomendações do mix infinito.
+
+- A chave e a versão do cliente são descobertas na página inicial do YouTube Music e renovadas periodicamente; há valores de fallback para quando a descoberta falha.
+- Nenhuma conta é necessária para buscar, sugerir ou navegar.
+- O Gecko não faz decipher de assinatura, não gera PO token e não contorna DRM. Se o endpoint `player` devolver uma URL de áudio direta, ela é usada; caso contrário, o app recorre à **ponte de reprodução opcional**.
+- A API é não oficial e pode mudar sem aviso. Se a busca parar de funcionar, confira a base configurada em **Ajustes → YouTube Music**.
+
+Em **Ajustes → YouTube Music** você pode ajustar a base da API e, se necessário, informar uma ponte de reprodução. A ponte precisa expor:
 
 ```text
 GET {base}/api/health
@@ -158,7 +165,7 @@ app/src/main/java/com/gecko/app/
 ├── model/           Track, Album, Artist, AppSettings, qualidade, paleta
 ├── navigation/      rotas do Compose Navigation
 ├── playback/        Media3/ExoPlayer, MediaSessionService e qualidade real
-├── sources/         ponte YouTube Music, complementos JSON, parser remoto
+├── sources/         API InnerTube, ponte YouTube Music, complementos e parser remoto
 ├── ui/              ViewModel, tema, componentes e telas
 │   ├── components/  player em miniatura, capas, cartões, fileiras e qualidade
 │   └── screens/     Início, Biblioteca, Downloads, Ajustes, Player, Karaokê, iPod
@@ -169,7 +176,7 @@ A injeção de dependências é manual (`AppContainer`), a persistência usa Dat
 
 ## Limitações conhecidas
 
-- **YouTube Music** exige uma ponte autorizada; o app não implementa scraping, login ou bypass de DRM.
+- **YouTube Music** usa a API pública para busca, sugestões e recomendações. A reprodução direta depende do que o endpoint `player` liberar e pode exigir uma ponte autorizada; o app não implementa decipher, PO token ou bypass de DRM.
 - **Discord** exige uma bridge em um computador, porque Rich Presence não é exposto a apps Android de terceiros.
 - **Qualidade lossless** depende da fonte. O app mostra a qualidade decodificada, mesmo que seja menor que a solicitada.
 - **Downloads** dependem das fontes configuradas; arquivos baixados ficam no armazenamento privado do app e não aparecem no gerenciador de arquivos do sistema.

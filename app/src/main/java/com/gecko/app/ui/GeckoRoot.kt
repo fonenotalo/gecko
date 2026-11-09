@@ -168,7 +168,9 @@ private fun GeckoNavHost(
                 library = library,
                 player = player,
                 search = search,
-                remoteEnabled = settings.ytMusicUrl.isNotBlank() || plugins.isNotEmpty(),
+                remoteEnabled = settings.ytMusicUrl.isNotBlank() ||
+                    settings.ytMusicStreamUrl.isNotBlank() ||
+                    plugins.isNotEmpty(),
                 onSearch = viewModel::search,
                 onClearSearch = viewModel::clearSearch,
                 onPlayTrack = { track, queue -> viewModel.playTrack(track, queue) },

@@ -36,6 +36,8 @@ enum class AudioQuality(
     }
 }
 
+const val DEFAULT_YT_MUSIC_API = "https://music.youtube.com/youtubei/v1/"
+
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val themeStyle: ThemeStyle = ThemeStyle.MODERN,
@@ -46,7 +48,8 @@ data class AppSettings(
     val smartDownloads: Boolean = true,
     val wifiOnlyDownloads: Boolean = true,
     val downloadQuality: AudioQuality = AudioQuality.LOSSLESS,
-    val ytMusicUrl: String = "",
+    val ytMusicUrl: String = DEFAULT_YT_MUSIC_API,
+    val ytMusicStreamUrl: String = "",
     val ytMusicToken: String = "",
     val scrobbleEnabled: Boolean = false,
     val lastFmApiKey: String = "",

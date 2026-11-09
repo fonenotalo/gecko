@@ -209,7 +209,8 @@ fun HomeScreen(
 
         item {
             SourceCard(
-                configured = settings.ytMusicUrl.isNotBlank(),
+                configured = settings.ytMusicUrl.isNotBlank() ||
+                    settings.ytMusicStreamUrl.isNotBlank(),
                 pluginCount = pluginCount,
                 onClick = onOpenSettings,
             )
