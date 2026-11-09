@@ -1,13 +1,11 @@
 package com.gecko.app.integrations
 
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.appcompat.app.AppCompatActivity
 
 /**
  * Abre o login do Discord em um WebView e tenta capturar o token de sessão
@@ -19,7 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
  * dispositivo. Se a extração automática falhar, o usuário precisa colar o
  * token manualmente nas configurações.
  */
-class DiscordLoginActivity : AppCompatActivity() {
+class DiscordLoginActivity : Activity() {
 
     companion object {
         const val EXTRA_TOKEN = "discord_token"
@@ -66,7 +64,6 @@ class DiscordLoginActivity : AppCompatActivity() {
         return ""
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
     private fun injetarLeituraToken() {
         val js = """
             (function() {
