@@ -1,0 +1,10 @@
+{
+  "id": "meu-acervo-lossless",
+  "name": "Meu Acervo Lossless",
+  "version": "1.0.0",
+  "baseUrl": "https://musica.exemplo.com",
+  "apiKey": "",
+  "supportsLossless": true,
+  "searchPath": "/api/search?q={query}",
+  "streamPath": "/api/stream/{id}?quality={quality}"
+}
