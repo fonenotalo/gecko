@@ -71,7 +71,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
     private val cipherLock = Mutex()
     @Volatile private var cipherOps: List<CipherOp>? = null
     @Volatile private var cipherFetchedAt = 0L
-    private const val CIPHER_TTL_MS = 12 * 60 * 60 * 1000L
+    private val CIPHER_TTL_MS = 12 * 60 * 60 * 1000L
 
     suspend fun search(baseUrl: String, query: String): SearchResult {
         val trimmed = query.trim()
@@ -610,7 +610,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
      * faz o decipher igual o NewPipe: baixa o `base.js`, extrai as operações e aplica na
      * assinatura `s`, montando a URL final.
      */
-    private fun resolveAudioUrl(streaming: JSONObject, quality: AudioQuality): String? {
+    private suspend fun resolveAudioUrl(streaming: JSONObject, quality: AudioQuality): String? {
         val formats = mutableListOf<JSONObject>()
         for (key in listOf("adaptiveFormats", "formats")) {
             val array = streaming.optJSONArray(key) ?: continue
@@ -651,10 +651,10 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
      * 4. Monta a URL final: `{url}&{sp}={assinatura_decifrada}`.
      */
     private suspend fun decipherSignature(cipher: String): String? {
-        val params = cipher.split("&").associateWith { it.split("=", limit = 2) }
-        val url = params.getOrNull("url")?.firstOrNull() ?: return null
-        val sp = params.getOrNull("sp")?.firstOrNull() ?: "sig"
-        val s = params.getOrNull("s")?.firstOrNull() ?: return null
+        val params = cipher.split("&").associate { val p = it.split("=", limit = 2); p.first() to p.last() }
+        val url = params["url"] ?: return null
+        val sp = params["sp"] ?: "sig"
+        val s = params["s"] ?: return null
 
         val ops = loadCipherOps() ?: return null
         var signature = s

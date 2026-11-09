@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 
 /**
  * Abre o login do Discord em um WebView e tenta capturar o token de sessão
@@ -19,7 +19,7 @@ import androidx.activity.ComponentActivity
  * dispositivo. Se a extração automática falhar, o usuário precisa colar o
  * token manualmente nas configurações.
  */
-class DiscordLoginActivity : ComponentActivity() {
+class DiscordLoginActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_TOKEN = "discord_token"
@@ -51,7 +51,7 @@ class DiscordLoginActivity : ComponentActivity() {
                 }
             })
         }
-        setContent(webView)
+        setContentView(webView)
         webView.loadUrl("https://discord.com/login")
     }
 
