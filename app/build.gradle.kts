@@ -4,10 +4,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val releaseKeystorePath = providers.environmentVariable("RELEASE_KEYSTORE_PATH").orNull()
-val releaseKeystorePassword = providers.environmentVariable("RELEASE_KEYSTORE_PASSWORD").orNull()
-val releaseKeyAlias = providers.environmentVariable("RELEASE_KEY_ALIAS").orNull()
-val releaseKeyPassword = providers.environmentVariable("RELEASE_KEY_PASSWORD").orNull()
+val releaseKeystorePath: String? = providers.environmentVariable("RELEASE_KEYSTORE_PATH").orNull
+val releaseKeystorePassword: String? = providers.environmentVariable("RELEASE_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias: String? = providers.environmentVariable("RELEASE_KEY_ALIAS").orNull
+val releaseKeyPassword: String? = providers.environmentVariable("RELEASE_KEY_PASSWORD").orNull
 
 android {
     namespace = "com.gecko.app"
