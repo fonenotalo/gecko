@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.auris.app"
+    namespace = "com.gecko.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.auris.app"
+        applicationId = "com.gecko.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

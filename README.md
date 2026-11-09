@@ -1,8 +1,8 @@
-# Auris
+# Gecko
 
 Player de música Android feito em Kotlin + Jetpack Compose. Interface limpa, tela de reprodução com a arte em destaque, cores tiradas da capa, temas claro/escuro e navegação pensada para uso com uma mão.
 
-Auris toca a sua biblioteca local, aceita fontes lossless adicionais por complementos e pode conversar com uma ponte auto-hospedada de YouTube Music. Não tem anúncios, não exige conta e não envia suas músicas locais para lugar nenhum.
+Gecko toca a sua biblioteca local, aceita fontes lossless adicionais por complementos e pode conversar com uma ponte auto-hospedada de YouTube Music. Não tem anúncios, não exige conta e não envia suas músicas locais para lugar nenhum.
 
 > **Status:** projeto em desenvolvimento. O APK de depuração é gerado pelo workflow do GitHub Actions; não há build assinado de produção.
 
@@ -21,7 +21,7 @@ Auris toca a sua biblioteca local, aceita fontes lossless adicionais por complem
 
 ## Integrações opcionais
 
-Todas as integrações abaixo são desligadas por padrão e ficam sob seu controle. O Auris é o cliente: ele não hospeda catálogo, não faz scraping e não contorna DRM.
+Todas as integrações abaixo são desligadas por padrão e ficam sob seu controle. O Gecko é o cliente: ele não hospeda catálogo, não faz scraping e não contorna DRM.
 
 ### YouTube Music (ponte auto-hospedada)
 
@@ -62,7 +62,7 @@ O token, quando preenchido, é enviado como `Authorization: Bearer ...` e `X-API
 
 ### Complementos lossless
 
-Um complemento é apenas um **manifesto JSON** importado em **Ajustes → Complementos lossless**. Nenhum código é executado. O arquivo fica em `files/auris_plugins` e pode ser removido a qualquer momento.
+Um complemento é apenas um **manifesto JSON** importado em **Ajustes → Complementos lossless**. Nenhum código é executado. O arquivo fica em `files/gecko_plugins` e pode ser removido a qualquer momento.
 
 Exemplo em [`docs/plugin-example.json`](docs/plugin-example.json):
 
@@ -87,11 +87,11 @@ Exemplo em [`docs/plugin-example.json`](docs/plugin-example.json):
 
 ### Last.fm
 
-Scrobbling opcional via API oficial. Preencha **API key**, **API secret** e a **session key** obtida no fluxo de autenticação do Last.fm. O botão **Validar sessão** chama `user.getInfo`; o Auris nunca pede sua senha.
+Scrobbling opcional via API oficial. Preencha **API key**, **API secret** e a **session key** obtida no fluxo de autenticação do Last.fm. O botão **Validar sessão** chama `user.getInfo`; o Gecko nunca pede sua senha.
 
 ### Discord
 
-O Discord não expõe Rich Presence para apps Android de terceiros. O Auris envia a faixa atual em JSON para uma **bridge** que você mantém em um computador com o Discord conectado:
+O Discord não expõe Rich Presence para apps Android de terceiros. O Gecko envia a faixa atual em JSON para uma **bridge** que você mantém em um computador com o Discord conectado:
 
 ```text
 POST {bridgeUrl}
@@ -100,7 +100,7 @@ Content-Type: application/json
 
 ```json
 {
-  "app": "Auris",
+  "app": "Gecko",
   "active": true,
   "title": "Faixa",
   "artist": "Artista",
@@ -120,7 +120,7 @@ Sem a bridge, a opção fica desligada e nada é enviado.
 ## Privacidade
 
 - Músicas, capas e letras locais ficam no aparelho.
-- Nenhum servidor do Auris é usado: as integrações falam direto com as URLs que você configura.
+- Nenhum servidor do Gecko é usado: as integrações falam direto com as URLs que você configura.
 - O app pede permissão de notificações (Android 13+) apenas para o controle de reprodução.
 - Downloads e banco de configurações usam o armazenamento privado do app.
 
@@ -151,7 +151,7 @@ O workflow [`.github/workflows/android.yml`](.github/workflows/android.yml) roda
 ## Estrutura do projeto
 
 ```text
-app/src/main/java/com/auris/app/
+app/src/main/java/com/gecko/app/
 ├── data/            biblioteca local, letras, downloads, demo, arte
 ├── di/              AppContainer (injeção manual)
 ├── integrations/    Last.fm e bridge do Discord
@@ -178,7 +178,7 @@ A injeção de dependências é manual (`AppContainer`), a persistência usa Dat
 
 ## Legal
 
-Auris não fornece, hospeda ou distribui conteúdo musical. Você é responsável pelas fontes que configura e deve respeitar os termos de uso e a legislação da sua região. O uso de complementos e pontes de terceiros é de sua responsabilidade.
+Gecko não fornece, hospeda ou distribui conteúdo musical. Você é responsável pelas fontes que configura e deve respeitar os termos de uso e a legislação da sua região. O uso de complementos e pontes de terceiros é de sua responsabilidade.
 
 ## Créditos
 

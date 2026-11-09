@@ -10,4 +10,4 @@
 -dontwarn org.openjsse.**
 
 # Keep data classes used by reflection-free JSON parsing
--keep class com.auris.app.model.** { *; }
+-keep class com.gecko.app.model.** { *; }

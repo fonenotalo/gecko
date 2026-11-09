@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Auris"
+rootProject.name = "Gecko"
 include(":app")
