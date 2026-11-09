@@ -207,7 +207,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         val details = root.optJSONObject("videoDetails")
         val status = root.optJSONObject("playabilityStatus")?.optString("status")
         val streaming = root.optJSONObject("streamingData")
-        YouTubePlayback(
+        return YouTubePlayback(
             title = details?.optString("title").orEmpty(),
             artist = details?.optString("author").orEmpty(),
             durationMs = (details?.optString("lengthSeconds")?.toLongOrNull() ?: 0L) * 1000L,
