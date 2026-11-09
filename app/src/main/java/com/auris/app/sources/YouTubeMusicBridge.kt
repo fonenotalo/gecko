@@ -58,9 +58,12 @@ class YouTubeMusicBridge(private val client: OkHttpClient) {
                 runCatching {
                     val request = request(url, token)
                     client.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) return@withContext null
-                        val body = response.body?.string().orEmpty()
-                        RemoteJson.streamUrl(body, base)
+                        if (!response.isSuccessful) {
+                            null
+                        } else {
+                            val body = response.body?.string().orEmpty()
+                            RemoteJson.streamUrl(body, base)
+                        }
                     }
                 }.getOrNull()
             }

@@ -96,7 +96,7 @@ data class AudioQualityInfo(
         )
 
         fun fromFormat(format: Format): AudioQualityInfo {
-            val codecRaw = format.codec
+            val codecRaw = format.codecs
             val mime = format.sampleMimeType?.lowercase()
             val codec = codecRaw?.lowercase()
             val lossless = (mime != null && mime in losslessMimes) ||

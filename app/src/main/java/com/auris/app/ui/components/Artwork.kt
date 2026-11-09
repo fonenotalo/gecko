@@ -65,7 +65,7 @@ fun TrackArtwork(
         modifier = modifier
             .then(shadow)
             .clip(shape)
-            .background(placeholderColors(track.title + track.artist)),
+            .background(Brush.linearGradient(placeholderColors(track.title + track.artist))),
         contentAlignment = Alignment.Center,
     ) {
         val model = uri
@@ -108,7 +108,7 @@ fun ArtworkImage(
         modifier = modifier
             .then(shadow)
             .clip(shape)
-            .background(placeholderColors(seed)),
+            .background(Brush.linearGradient(placeholderColors(seed))),
         contentAlignment = Alignment.Center,
     ) {
         if (uri != null) {

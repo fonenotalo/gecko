@@ -101,8 +101,11 @@ class PluginRepository(
                 runCatching {
                     val request = request(url, plugin.apiKey)
                     client.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) return@withContext null
-                        RemoteJson.streamUrl(response.body?.string().orEmpty(), plugin.baseUrl)
+                        if (!response.isSuccessful) {
+                            null
+                        } else {
+                            RemoteJson.streamUrl(response.body?.string().orEmpty(), plugin.baseUrl)
+                        }
                     }
                 }.getOrNull()
             }

@@ -763,7 +763,7 @@ class AurisViewModel(private val app: AurisApp) : ViewModel() {
             _search.update { it.copy(loading = true, error = null) }
             val remote = coroutineScope {
                 val yt = if (currentSettings.ytMusicUrl.isNotBlank()) {
-                    async {
+                    async<List<Track>> {
                         runCatching {
                             container.youTubeMusic.search(
                                 currentSettings.ytMusicUrl,
@@ -776,7 +776,7 @@ class AurisViewModel(private val app: AurisApp) : ViewModel() {
                     null
                 }
                 val pluginsJob = if (container.plugins.plugins.value.isNotEmpty()) {
-                    async {
+                    async<List<Track>> {
                         runCatching { container.plugins.search(trimmed) }
                             .getOrDefault(emptyList())
                     }
