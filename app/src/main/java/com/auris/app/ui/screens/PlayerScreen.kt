@@ -363,20 +363,21 @@ fun PlayerScreen(
     }
 
     if (showQuality) {
-        val qualityTrack = track ?: return@Box
-        ModalBottomSheet(
-            onDismissRequest = { showQuality = false },
-            sheetState = qualitySheet,
-        ) {
-            QualitySheetContent(
-                track = qualityTrack,
-                quality = snapshot.quality,
-                settings = settings,
-                onDownload = {
-                    showQuality = false
-                    onDownload(qualityTrack)
-                },
-            )
+        track?.let { qualityTrack ->
+            ModalBottomSheet(
+                onDismissRequest = { showQuality = false },
+                sheetState = qualitySheet,
+            ) {
+                QualitySheetContent(
+                    track = qualityTrack,
+                    quality = snapshot.quality,
+                    settings = settings,
+                    onDownload = {
+                        showQuality = false
+                        onDownload(qualityTrack)
+                    },
+                )
+            }
         }
     }
 
