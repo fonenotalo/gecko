@@ -4,22 +4,101 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- warm halo behind the gecko -->
     <path
-        android:pathData="M54,30 L37,79"
-        android:strokeColor="#E8C27D"
+        android:pathData="M54,17 a37,37 0 1,0 0.1,0 Z"
+        android:fillColor="#F2C96D">
+        <gradient
+            android:type="radial"
+            android:centerX="0.5"
+            android:centerY="0.5"
+            android:gradientRadius="0.5"
+            android:startColor="#FBE8AE"
+            android:centerColor="#EFC464"
+            android:endColor="#B97E1E" />
+    </path>
+    <path
+        android:pathData="M54,17 a37,37 0 1,0 0.1,0 Z"
+        android:fillType="evenOdd"
+        android:strokeColor="#8C5D12"
+        android:strokeWidth="4" />
+
+    <!-- equalizer behind the gecko -->
+    <path
+        android:fillColor="#7C5618"
+        android:pathData="M29,31v14h7V31zM40,26v24h7V26zM51,33v12h7V33z" />
+
+    <!-- gecko body seen from above, tail curled into a spiral -->
+    <path
+        android:pathData="M31,66 C18,68 9,59 14,49 C19,39 30,44 26,54 C23,61 15,60 15,52"
+        android:strokeColor="#2F7D4F"
+        android:strokeWidth="9"
         android:strokeLineCap="round"
-        android:strokeWidth="6" />
+        android:fillColor="#00000000" />
     <path
-        android:pathData="M54,30 L71,79"
-        android:strokeColor="#E8C27D"
+        android:pathData="M31,66 C18,68 9,59 14,49 C19,39 30,44 26,54 C23,61 15,60 15,52"
+        android:strokeColor="#8AD07B"
+        android:strokeWidth="5"
         android:strokeLineCap="round"
-        android:strokeWidth="6" />
+        android:fillColor="#00000000" />
     <path
-        android:pathData="M44,63 L64,63"
-        android:strokeColor="#F5E6C8"
+        android:pathData="M91,49 C91,64 79,75 61,75 C43,75 27,68 24,55 C21,42 29,30 43,27 C54,25 65,30 71,39 C77,37 85,38 89,43 C90,45 91,47 91,49 Z"
+        android:fillColor="#62BE6E">
+        <gradient
+            android:type="linear"
+            android:startX="0.25"
+            android:startY="0.18"
+            android:endX="0.85"
+            android:endY="0.9"
+            android:startColor="#8AD07B"
+            android:endColor="#2F7D4F" />
+    </path>
+
+    <!-- four feet with tiny toe pads -->
+    <path
+        android:pathData="M34,39 C28,35 22,34 17,37"
+        android:strokeColor="#2F7D4F"
+        android:strokeWidth="6"
         android:strokeLineCap="round"
-        android:strokeWidth="5" />
+        android:fillColor="#00000000" />
     <path
-        android:fillColor="#E8C27D"
-        android:pathData="M54,20m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" />
+        android:pathData="M36,67 C30,71 24,72 19,69"
+        android:strokeColor="#2F7D4F"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M70,66 C76,70 82,72 88,69"
+        android:strokeColor="#2F7D4F"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M71,37 C77,34 83,34 88,37"
+        android:strokeColor="#2F7D4F"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <path
+        android:fillColor="#EAF6D5"
+        android:pathData="M15,37m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0M89,37m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0M19,69m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0M89,69m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" />
+
+    <!-- back spots -->
+    <path
+        android:fillColor="#DFF0C5"
+        android:fillAlpha="0.95"
+        android:pathData="M50,39m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0M62,50m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0M49,60m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0" />
+
+    <!-- friendly eyes and blush marks -->
+    <path
+        android:fillColor="#10231B"
+        android:pathData="M76,41m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0M86,48m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M77,40m-1.4,0a1.4,1.4 0,1 1,2.8 0a1.4,1.4 0,1 1,-2.8 0M87,47m-1.4,0a1.4,1.4 0,1 1,2.8 0a1.4,1.4 0,1 1,-2.8 0" />
+    <path
+        android:fillColor="#F3A9A0"
+        android:fillAlpha="0.9"
+        android:pathData="M72,49m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
 </vector>
