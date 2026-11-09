@@ -104,15 +104,18 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
     private val _palette = MutableStateFlow<AlbumPalette?>(null)
     private val _infiniteMix = MutableStateFlow(false)
 
+    private val lyricsState = combine(_lyrics, _lyricsLoading, _lyricsError) { lyrics, loading, error ->
+        Triple(lyrics, loading, error)
+    }
+
     val player: StateFlow<PlayerUiState> = combine(
         container.player.snapshot,
         _queueTracks,
-        _lyrics,
-        _lyricsLoading,
-        _lyricsError,
+        lyricsState,
         _palette,
         _infiniteMix,
-    ) { snapshot, queue, lyrics, lyricsLoading, lyricsError, palette, infinite ->
+    ) { snapshot, queue, lyricsState, palette, infinite ->
+        val (lyrics, lyricsLoading, lyricsError) = lyricsState
         val current = snapshot.currentMediaId?.let { id -> queue.firstOrNull { it.id == id } }
             ?: queue.getOrNull(snapshot.index)
         PlayerUiState(
