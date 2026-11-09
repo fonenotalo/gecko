@@ -363,7 +363,7 @@ fun PlayerScreen(
     }
 
     if (showQuality) {
-        val qualityTrack = track
+        val qualityTrack = track ?: return@Box
         ModalBottomSheet(
             onDismissRequest = { showQuality = false },
             sheetState = qualitySheet,
