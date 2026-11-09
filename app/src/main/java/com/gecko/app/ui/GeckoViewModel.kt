@@ -59,9 +59,20 @@ data class SearchState(
     val query: String = "",
     val local: List<Track> = emptyList(),
     val remote: List<Track> = emptyList(),
+    val browseItems: List<YouTubeMusicApi.BrowseItem> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,
     val suggestions: List<String> = emptyList(),
+)
+
+data class BrowseDetailState(
+    val browseItem: YouTubeMusicApi.BrowseItem? = null,
+    val title: String = "",
+    val subtitle: String? = null,
+    val tracks: List<Track> = emptyList(),
+    val items: List<YouTubeMusicApi.BrowseItem> = emptyList(),
+    val loading: Boolean = false,
+    val error: String? = null,
 )
 
 data class PlayerUiState(
@@ -103,6 +114,8 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
     private val _lyricsError = MutableStateFlow<String?>(null)
     private val _palette = MutableStateFlow<AlbumPalette?>(null)
     private val _infiniteMix = MutableStateFlow(false)
+    private val _browseDetail = MutableStateFlow<BrowseDetailState?>(null)
+    val browseDetail: StateFlow<BrowseDetailState?> = _browseDetail.asStateFlow()
 
     private val lyricsState = combine(_lyrics, _lyricsLoading, _lyricsError) { lyrics, loading, error ->
         Triple(lyrics, loading, error)
@@ -138,6 +151,7 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
 
     private var searchJob: Job? = null
     private var suggestionsJob: Job? = null
+    private var browseJob: Job? = null
     private var lyricsJob: Job? = null
     private var paletteJob: Job? = null
     private var appendingMix = false
@@ -430,6 +444,72 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
     fun cycleRepeat() = container.player.cycleRepeat()
     fun stop() = container.player.stop()
 
+    fun openYouTubeBrowse(item: YouTubeMusicApi.BrowseItem) {
+        if (item.browseId.isBlank()) return
+        browseJob?.cancel()
+        _browseDetail.value = BrowseDetailState(
+            browseItem = item,
+            title = item.title,
+            subtitle = item.subtitle,
+            loading = true,
+        )
+        browseJob = viewModelScope.launch {
+            val currentSettings = settings.value
+            val apiUrl = currentSettings.ytMusicUrl.trim()
+            val result = if (YouTubeMusicApi.isDirectApi(apiUrl)) {
+                runCatching {
+                    container.youTubeMusicApi.browse(
+                        baseUrl = apiUrl,
+                        browseId = item.browseId,
+                        params = item.params,
+                    )
+                }.getOrNull()
+            } else {
+                null
+            }
+            if (_browseDetail.value?.browseItem?.browseId != item.browseId) return@launch
+            _browseDetail.value = if (result == null) {
+                BrowseDetailState(
+                    browseItem = item,
+                    title = item.title,
+                    subtitle = item.subtitle,
+                    loading = false,
+                    error = "Não foi possível carregar esta página. Confira a conexão.",
+                )
+            } else {
+                val fallbackArtist = item.subtitle.substringBefore("•").trim()
+                    .takeIf { value -> value.any(Char::isLetter) }
+                    .orEmpty()
+                val hydratedTracks = result.tracks.map { track ->
+                    if (track.artist.isBlank()) {
+                        track.copy(
+                            artist = fallbackArtist,
+                            album = if (item.kind == YouTubeMusicApi.BrowseKind.ALBUM && track.album.isBlank()) {
+                                item.title
+                            } else {
+                                track.album
+                            },
+                        )
+                    } else {
+                        track
+                    }
+                }
+                BrowseDetailState(
+                    browseItem = item,
+                    title = result.title ?: item.title,
+                    subtitle = result.subtitle ?: item.subtitle,
+                    tracks = hydratedTracks,
+                    items = result.items,
+                )
+            }
+        }
+    }
+
+    fun closeYouTubeBrowse() {
+        browseJob?.cancel()
+        _browseDetail.value = null
+    }
+
     fun startInfiniteMix(seed: Track? = null) {
         viewModelScope.launch {
             val currentSettings = settings.value
@@ -496,13 +576,19 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
     ): List<Track> {
         if (seed.source != TrackSource.YOUTUBE_MUSIC) return emptyList()
         val remoteId = seed.remoteId?.takeIf { it.isNotBlank() } ?: return emptyList()
-        val bridgeReady = currentSettings.ytMusicStreamUrl.isNotBlank() ||
-            !YouTubeMusicApi.isDirectApi(currentSettings.ytMusicUrl)
-        if (!bridgeReady) return emptyList()
+        val apiUrl = currentSettings.ytMusicUrl.trim()
+        if (!YouTubeMusicApi.isDirectApi(apiUrl)) return emptyList()
+
+        val queued = runCatching {
+            container.youTubeMusicApi.queue(
+                baseUrl = apiUrl,
+                videoIds = listOf(remoteId),
+            ).firstOrNull()
+        }.getOrNull()
         return runCatching {
             container.youTubeMusicApi.next(
-                baseUrl = currentSettings.ytMusicUrl.trim(),
-                videoId = remoteId,
+                baseUrl = apiUrl,
+                videoId = queued?.remoteId ?: remoteId,
             ).filter { it.id != seed.id }
                 .take(count)
         }.getOrDefault(emptyList())
@@ -901,11 +987,11 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
         searchJob = viewModelScope.launch {
             delay(320L)
             _search.update { it.copy(loading = true, error = null) }
-            val remote = coroutineScope {
+            val searchResult = coroutineScope {
                 val yt = if (currentSettings.ytMusicUrl.isNotBlank() ||
                     currentSettings.ytMusicStreamUrl.isNotBlank()
                 ) {
-                    async<List<Track>> { searchYouTube(trimmed, currentSettings) }
+                    async<YouTubeMusicApi.SearchResult> { searchYouTube(trimmed, currentSettings) }
                 } else {
                     null
                 }
@@ -917,12 +1003,18 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
                 } else {
                     null
                 }
-                listOfNotNull(yt, pluginsJob).awaitAll().flatten()
+                val ytResult = yt?.await() ?: YouTubeMusicApi.SearchResult(emptyList(), emptyList())
+                val pluginTracks = pluginsJob?.await().orEmpty()
+                YouTubeMusicApi.SearchResult(
+                    tracks = ytResult.tracks + pluginTracks,
+                    browseItems = ytResult.browseItems,
+                )
             }
             if (_search.value.query.trim() != trimmed) return@launch
             _search.update {
                 it.copy(
-                    remote = remote.take(50),
+                    remote = searchResult.tracks.take(50),
+                    browseItems = searchResult.browseItems.take(12),
                     loading = false,
                     error = null,
                 )
@@ -930,7 +1022,7 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
         }
     }
 
-    private suspend fun searchYouTube(query: String, currentSettings: AppSettings): List<Track> {
+    private suspend fun searchYouTube(query: String, currentSettings: AppSettings): YouTubeMusicApi.SearchResult {
         val apiUrl = currentSettings.ytMusicUrl.trim()
         val streamBridge = currentSettings.ytMusicStreamUrl.trim()
         val token = currentSettings.ytMusicToken
@@ -938,17 +1030,21 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
         if (apiUrl.isBlank() || YouTubeMusicApi.isDirectApi(apiUrl)) {
             val direct = runCatching {
                 container.youTubeMusicApi.search(apiUrl, query)
-            }.getOrDefault(emptyList())
-            if (direct.isNotEmpty() || streamBridge.isBlank()) return direct
-            return runCatching {
+            }.getOrDefault(YouTubeMusicApi.SearchResult(emptyList(), emptyList()))
+            if (direct.tracks.isNotEmpty() || direct.browseItems.isNotEmpty() || streamBridge.isBlank()) {
+                return direct
+            }
+            val bridgeTracks = runCatching {
                 container.youTubeMusic.search(streamBridge, token, query)
             }.getOrDefault(emptyList())
+            return YouTubeMusicApi.SearchResult(tracks = bridgeTracks, browseItems = emptyList())
         }
 
         // Compatibilidade: URL antiga apontando para uma ponte.
-        return runCatching {
+        val bridgeTracks = runCatching {
             container.youTubeMusic.search(apiUrl, token, query)
         }.getOrDefault(emptyList())
+        return YouTubeMusicApi.SearchResult(tracks = bridgeTracks, browseItems = emptyList())
     }
 
     fun clearSearch() {

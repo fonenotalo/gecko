@@ -9,6 +9,7 @@ Gecko toca a sua biblioteca local, aceita fontes lossless adicionais por complem
 ## O que já está no app
 
 - **Biblioteca única** com músicas, álbuns e artistas do aparelho, busca local e busca remota nas fontes conectadas.
+- **YouTube Music via InnerTube** com busca, sugestões, navegação de álbuns/artistas/playlists, informações de reprodução, fila e recomendações.
 - **Player completo** com arte grande, paleta extraída da capa, seek, embaralhar, repetir, fila editável, letra em tela cheia e folha de qualidade.
 - **Qualidade real, não prometida.** O selo de qualidade vem do `Format`/`Tracks` do Media3, então o app mostra o que o decoder entregou de verdade — inclusive quando a fonte remota manda algo abaixo do pedido.
 - **Downloads offline** com progresso, retry, exclusão individual/total, limite por Wi-Fi e downloads inteligentes das próximas faixas.
@@ -26,7 +27,7 @@ As integrações de conta e as pontes opcionais ficam desligadas por padrão e s
 
 ### YouTube Music (API pública + ponte opcional)
 
-A fonte remota padrão é a API pública do YouTube Music em `https://music.youtube.com/youtubei/v1/`. O Gecko usa os endpoints `search`, `browse`, `player`, `next`, `music/get_queue` e `music/get_search_suggestions` para busca, sugestões, metadados, fila e recomendações do mix infinito.
+A fonte remota padrão é a API pública do YouTube Music em `https://music.youtube.com/youtubei/v1/`. O Gecko usa os endpoints `search`, `browse`, `player`, `next`, `music/get_queue` e `music/get_search_suggestions` para busca, sugestões, metadados, fila, recomendações e navegação de álbuns, artistas e playlists.
 
 - A chave e a versão do cliente são descobertas na página inicial do YouTube Music e renovadas periodicamente; há valores de fallback para quando a descoberta falha.
 - Nenhuma conta é necessária para buscar, sugerir ou navegar.

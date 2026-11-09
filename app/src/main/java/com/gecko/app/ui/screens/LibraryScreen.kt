@@ -1,5 +1,6 @@
 package com.gecko.app.ui.screens
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -66,6 +67,8 @@ import androidx.compose.ui.unit.dp
 import com.gecko.app.model.Album
 import com.gecko.app.model.Artist
 import com.gecko.app.model.Track
+import com.gecko.app.sources.YouTubeMusicApi
+import com.gecko.app.ui.BrowseDetailState
 import com.gecko.app.ui.LibraryState
 import com.gecko.app.ui.PlayerUiState
 import com.gecko.app.ui.SearchState
@@ -88,9 +91,12 @@ fun LibraryScreen(
     library: LibraryState,
     player: PlayerUiState,
     search: SearchState,
+    browseDetail: BrowseDetailState?,
     remoteEnabled: Boolean,
     onSearch: (String) -> Unit,
     onClearSearch: () -> Unit,
+    onOpenBrowse: (YouTubeMusicApi.BrowseItem) -> Unit,
+    onCloseBrowse: () -> Unit,
     onPlayTrack: (Track, List<Track>) -> Unit,
     onPlayNext: (Track) -> Unit,
     onAddToQueue: (Track) -> Unit,
@@ -300,6 +306,27 @@ fun LibraryScreen(
                 }
             }
 
+            if (search.browseItems.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        text = "Álbuns, artistas e playlists",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(search.browseItems, key = { it.browseId }) { browseItem ->
+                            YouTubeBrowseCard(
+                                item = browseItem,
+                                onClick = { onOpenBrowse(browseItem) },
+                            )
+                        }
+                    }
+                }
+            }
+
             if (remoteEnabled) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Row(
@@ -349,7 +376,9 @@ fun LibraryScreen(
                 }
             }
 
-            if (search.local.isEmpty() && search.remote.isEmpty() && !search.loading) {
+            if (search.local.isEmpty() && search.remote.isEmpty() &&
+                search.browseItems.isEmpty() && !search.loading
+            ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     EmptyState(
                         title = "Nada encontrado",
@@ -366,6 +395,19 @@ fun LibraryScreen(
                 }
             }
         }
+    }
+
+    browseDetail?.let { detail ->
+        YouTubeBrowseBottomSheet(
+            detail = detail,
+            player = player,
+            onDismiss = onCloseBrowse,
+            onOpenBrowse = onOpenBrowse,
+            onPlayTrack = onPlayTrack,
+            onPlayNext = onPlayNext,
+            onAddToQueue = onAddToQueue,
+            onDownload = onDownload,
+        )
     }
 
     selectedAlbum?.let { album ->
@@ -487,6 +529,48 @@ private fun LibraryEmptyState(
 }
 
 @Composable
+private fun YouTubeBrowseCard(item: YouTubeMusicApi.BrowseItem, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .width(142.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(2.dp),
+    ) {
+        ArtworkImage(
+            uri = item.artworkUrl?.let(Uri::parse),
+            seed = item.title + item.subtitle,
+            contentDescription = "Abrir ${item.title}",
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f),
+            corner = 16,
+        )
+        Spacer(Modifier.height(7.dp))
+        Text(
+            text = item.title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = item.subtitle.ifBlank { item.kind.label },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = item.kind.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
 private fun AlbumCard(album: Album, onClick: () -> Unit) {
     Column(
         modifier = Modifier
@@ -552,6 +636,122 @@ private fun ArtistCard(artist: Artist, onClick: () -> Unit) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun YouTubeBrowseBottomSheet(
+    detail: BrowseDetailState,
+    player: PlayerUiState,
+    onDismiss: () -> Unit,
+    onOpenBrowse: (YouTubeMusicApi.BrowseItem) -> Unit,
+    onPlayTrack: (Track, List<Track>) -> Unit,
+    onPlayNext: (Track) -> Unit,
+    onAddToQueue: (Track) -> Unit,
+    onDownload: (Track) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+        ) {
+            Text(
+                text = detail.title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!detail.subtitle.isNullOrBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = detail.subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (detail.tracks.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = { onPlayTrack(detail.tracks.first(), detail.tracks) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Tocar tudo • ${detail.tracks.size} faixas")
+                }
+            }
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        )
+        when {
+            detail.loading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 28.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            detail.error != null -> {
+                EmptyState(
+                    title = "Não foi possível carregar",
+                    message = detail.error,
+                    icon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                )
+            }
+            detail.items.isNotEmpty() -> {
+                LazyRow(
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(detail.items, key = { it.browseId }) { item ->
+                        YouTubeBrowseCard(
+                            item = item,
+                            onClick = { onOpenBrowse(item) },
+                        )
+                    }
+                }
+            }
+            detail.tracks.isEmpty() -> {
+                EmptyState(
+                    title = "Nenhuma faixa nesta página",
+                    message = "A API retornou este conteúdo sem faixas reproduzíveis.",
+                    icon = { Icon(Icons.Rounded.MusicNote, contentDescription = null) },
+                )
+            }
+        }
+        if (detail.tracks.isNotEmpty() && !detail.loading) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp),
+                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
+            ) {
+                items(detail.tracks, key = { it.id }) { track ->
+                    TrackRow(
+                        track = track,
+                        isCurrent = player.current?.id == track.id,
+                        isPlaying = player.snapshot.isPlaying,
+                        actions = TrackActions(
+                            onPlayNext = { onPlayNext(track) },
+                            onAddToQueue = { onAddToQueue(track) },
+                            onDownload = if (track.source.isRemote && !track.isDownloaded) {
+                                { onDownload(track) }
+                            } else {
+                                null
+                            },
+                        ),
+                        onClick = { onPlayTrack(track, detail.tracks) },
+                    )
+                }
+            }
+        }
     }
 }
 

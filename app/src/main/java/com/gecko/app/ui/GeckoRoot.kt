@@ -50,6 +50,7 @@ fun GeckoRoot(viewModel: GeckoViewModel) {
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val plugins by viewModel.plugins.collectAsStateWithLifecycle()
     val search by viewModel.search.collectAsStateWithLifecycle()
+    val browseDetail by viewModel.browseDetail.collectAsStateWithLifecycle()
     val bridgeStatus by viewModel.bridgeStatus.collectAsStateWithLifecycle()
 
     val navController = rememberNavController()
@@ -110,6 +111,7 @@ fun GeckoRoot(viewModel: GeckoViewModel) {
                     downloads = downloads,
                     plugins = plugins,
                     search = search,
+                    browseDetail = browseDetail,
                     bridgeStatus = bridgeStatus,
                     innerPadding = innerPadding,
                 )
@@ -128,6 +130,7 @@ private fun GeckoNavHost(
     downloads: List<DownloadEntry>,
     plugins: List<SourcePlugin>,
     search: SearchState,
+    browseDetail: BrowseDetailState?,
     bridgeStatus: BridgeStatus,
     innerPadding: PaddingValues,
 ) {
@@ -168,11 +171,14 @@ private fun GeckoNavHost(
                 library = library,
                 player = player,
                 search = search,
+                browseDetail = browseDetail,
                 remoteEnabled = settings.ytMusicUrl.isNotBlank() ||
                     settings.ytMusicStreamUrl.isNotBlank() ||
                     plugins.isNotEmpty(),
                 onSearch = viewModel::search,
                 onClearSearch = viewModel::clearSearch,
+                onOpenBrowse = viewModel::openYouTubeBrowse,
+                onCloseBrowse = viewModel::closeYouTubeBrowse,
                 onPlayTrack = { track, queue -> viewModel.playTrack(track, queue) },
                 onPlayNext = viewModel::playNext,
                 onAddToQueue = viewModel::addToQueue,

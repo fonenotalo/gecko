@@ -32,6 +32,40 @@ import kotlin.math.abs
  */
 class YouTubeMusicApi(private val client: OkHttpClient) {
 
+    enum class BrowseKind(val label: String) {
+        ALBUM("Álbum"),
+        ARTIST("Artista"),
+        PLAYLIST("Playlist"),
+        OTHER("Coleção"),
+    }
+
+    data class BrowseItem(
+        val title: String,
+        val subtitle: String,
+        val browseId: String,
+        val params: String?,
+        val kind: BrowseKind,
+        val pageType: String,
+        val artworkUrl: String?,
+    )
+
+    /**
+     * Página de um álbum, artista ou playlist decomposta em faixas e itens
+     * relacionados. [items] permite continuar navegando por álbuns, artistas e
+     * playlists encontrados nessa página.
+     */
+    data class BrowsePage(
+        val title: String?,
+        val subtitle: String?,
+        val tracks: List<Track>,
+        val items: List<BrowseItem>,
+    )
+
+    data class SearchResult(
+        val tracks: List<Track>,
+        val browseItems: List<BrowseItem>,
+    )
+
     private val apiClient = client.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)
@@ -43,18 +77,18 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
     @Volatile
     private var config: ApiConfig? = null
 
-    suspend fun search(baseUrl: String, query: String): List<Track> {
+    suspend fun search(baseUrl: String, query: String): SearchResult {
         val trimmed = query.trim()
-        if (trimmed.isBlank()) return emptyList()
+        if (trimmed.isBlank()) return SearchResult(emptyList(), emptyList())
         return withContext(Dispatchers.IO) {
             withTimeoutOrNull(30_000L) {
                 val root = post(
                     baseUrl = baseUrl,
                     endpoint = "search",
                     extra = JSONObject().put("query", trimmed),
-                ) ?: return@withTimeoutOrNull emptyList()
-                parseTracks(root)
-            } ?: emptyList()
+                ) ?: return@withTimeoutOrNull SearchResult(emptyList(), emptyList())
+                parseSearchResult(root)
+            } ?: SearchResult(emptyList(), emptyList())
         }
     }
 
@@ -83,15 +117,15 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         baseUrl: String,
         browseId: String,
         params: String? = null,
-    ): List<Track> {
-        if (browseId.isBlank()) return emptyList()
+    ): BrowsePage? {
+        if (browseId.isBlank()) return null
         return withContext(Dispatchers.IO) {
             withTimeoutOrNull(30_000L) {
                 val extra = JSONObject().put("browseId", browseId)
                 if (!params.isNullOrBlank()) extra.put("params", params)
-                val root = post(baseUrl, "browse", extra) ?: return@withTimeoutOrNull emptyList()
-                parseTracks(root)
-            } ?: emptyList()
+                val root = post(baseUrl, "browse", extra) ?: return@withTimeoutOrNull null
+                parseBrowsePage(root)
+            }
         }
     }
 
@@ -328,6 +362,146 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         return (responsive + panel).distinctBy { it.remoteId }
     }
 
+    private fun parseSearchResult(root: JSONObject): SearchResult {
+        val responsiveItems = collectObjects(root, "musicResponsiveListItemRenderer")
+        val tracks = responsiveItems.mapNotNull(::parseResponsiveItem)
+        val panelTracks = collectObjects(root, "playlistPanelVideoRenderer")
+            .mapNotNull(::parsePlaylistPanelItem)
+        val browseItems = responsiveItems.mapNotNull(::parseResponsiveBrowseItem) +
+            collectObjects(root, "musicTwoRowItemRenderer").mapNotNull(::parseTwoRowBrowseItem)
+
+        return SearchResult(
+            tracks = (tracks + panelTracks).distinctBy { it.remoteId },
+            browseItems = browseItems
+                .distinctBy { it.browseId }
+                .take(40),
+        )
+    }
+
+    private fun parseBrowsePage(root: JSONObject): BrowsePage {
+        val title = browseTitle(root)
+        val tracks = parseTracks(root)
+        val items = (collectObjects(root, "musicResponsiveListItemRenderer")
+            .mapNotNull(::parseResponsiveBrowseItem) +
+            collectObjects(root, "musicTwoRowItemRenderer").mapNotNull(::parseTwoRowBrowseItem))
+            .filter { it.browseId.isNotBlank() }
+            .distinctBy { it.browseId }
+        return BrowsePage(
+            title = title,
+            subtitle = browseSubtitle(root),
+            tracks = tracks.distinctBy { it.remoteId },
+            items = items.take(60),
+        )
+    }
+
+    private fun parseResponsiveBrowseItem(item: JSONObject): BrowseItem? {
+        val navigation = item.optJSONObject("navigationEndpoint") ?: return null
+        val browse = navigation.optJSONObject("browseEndpoint") ?: return null
+        val browseId = browse.optString("browseId").trim()
+        if (browseId.isBlank()) return null
+        val pageType = browseEndpointPageType(browse)
+        val kind = browseKind(pageType) ?: return null
+
+        val columns = mutableListOf<List<JSONObject>>()
+        val flexColumns = item.optJSONArray("flexColumns")
+        if (flexColumns != null) {
+            for (index in 0 until flexColumns.length()) {
+                val text = flexColumns.optJSONObject(index)
+                    ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
+                    ?.optJSONObject("text")
+                columns += textRuns(text)
+            }
+        }
+        val title = runText(columns.firstOrNull().orEmpty()).trim()
+            .ifBlank { return null }
+        val meta = columns.drop(1).flatten()
+        val metaTexts = meta.map { it.optString("text").trim() }
+            .filter { it.isNotBlank() && it != "•" && it != " • " }
+        val subtitle = metaTexts
+            .filter { it !in MUSIC_LABELS }
+            .joinToString(" • ")
+            .trim()
+
+        return BrowseItem(
+            title = title,
+            subtitle = subtitle,
+            browseId = browseId,
+            params = browse.optString("params").takeIf { it.isNotBlank() },
+            kind = kind,
+            pageType = pageType,
+            artworkUrl = thumbnailUrl(item),
+        )
+    }
+
+    private fun parseTwoRowBrowseItem(item: JSONObject): BrowseItem? {
+        val navigation = item.optJSONObject("navigationEndpoint") ?: return null
+        val browse = navigation.optJSONObject("browseEndpoint") ?: return null
+        val browseId = browse.optString("browseId").trim()
+        if (browseId.isBlank()) return null
+        val pageType = browseEndpointPageType(browse)
+        val kind = browseKind(pageType) ?: BrowseKind.OTHER
+        if (kind == BrowseKind.OTHER && pageType.isNotBlank()) return null
+
+        val title = runText(textRuns(item.optJSONObject("title"))).trim()
+            .ifBlank { return null }
+        val subtitle = runText(textRuns(item.optJSONObject("subtitle"))).trim()
+        return BrowseItem(
+            title = title,
+            subtitle = subtitle,
+            browseId = browseId,
+            params = browse.optString("params").takeIf { it.isNotBlank() },
+            kind = kind,
+            pageType = pageType,
+            artworkUrl = thumbnailUrl(item),
+        )
+    }
+
+    private fun browseEndpointPageType(browse: JSONObject): String =
+        browse.optJSONObject("browseEndpointContextSupportedConfigs")
+            ?.optJSONObject("browseEndpointContextMusicConfig")
+            ?.optString("pageType")
+            .orEmpty()
+
+    private fun browseKind(pageType: String): BrowseKind? = when (pageType) {
+        "MUSIC_PAGE_TYPE_ALBUM" -> BrowseKind.ALBUM
+        "MUSIC_PAGE_TYPE_ARTIST" -> BrowseKind.ARTIST
+        "MUSIC_PAGE_TYPE_PLAYLIST" -> BrowseKind.PLAYLIST
+        else -> null
+    }
+
+    private fun browseTitle(root: JSONObject): String? {
+        val header = root.optJSONObject("header")
+        val candidates = listOf(
+            header?.optJSONObject("musicDetailHeaderRenderer")?.optJSONObject("title"),
+            header?.optJSONObject("musicHeaderRenderer")?.optJSONObject("title"),
+            header?.optJSONObject("musicImmersiveHeaderRenderer")?.optJSONObject("title"),
+            header?.optJSONObject("musicCardHeaderRenderer")?.optJSONObject("headerText"),
+        )
+        for (candidate in candidates) {
+            val title = runText(textRuns(candidate)).trim()
+            if (title.isNotBlank()) return title
+        }
+        val microformat = root.optJSONObject("microformat")
+            ?.optJSONObject("microformatDataRenderer")
+            ?.optString("title")
+            .orEmpty()
+        return microformat.trim().takeIf { it.isNotBlank() }
+    }
+
+    private fun browseSubtitle(root: JSONObject): String? {
+        val header = root.optJSONObject("header")
+        val candidates = listOf(
+            header?.optJSONObject("musicDetailHeaderRenderer")?.optJSONObject("subtitle"),
+            header?.optJSONObject("musicHeaderRenderer")?.optJSONObject("subtitle"),
+            header?.optJSONObject("musicHeaderRenderer")?.optJSONObject("strapi"),
+        )
+        for (candidate in candidates) {
+            val subtitle = runText(textRuns(candidate)).trim()
+            if (subtitle.isNotBlank()) return subtitle
+        }
+        return null
+    }
+
     private fun parseResponsiveItem(item: JSONObject): Track? {
         val videoId = item.optJSONObject("playlistItemData")
             ?.optString("videoId")
@@ -420,7 +594,10 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
                 array.optJSONObject(index)?.let(formats::add)
             }
         }
-        val audio = formats.filter { it.optString("mimeType").startsWith("audio/") }
+        val audio = formats.filter {
+            it.optString("mimeType").startsWith("audio/") &&
+                it.optString("url").isNotBlank()
+        }
         if (audio.isEmpty()) return null
 
         val mp4 = audio.filter { it.optString("mimeType").startsWith("audio/mp4") }
@@ -479,13 +656,22 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
     }
 
     private fun thumbnailUrl(item: JSONObject): String? {
-        val direct = item.optJSONObject("thumbnail")
+        val thumbnail = item.optJSONObject("thumbnail")
+        val direct = thumbnail
             ?.optJSONObject("musicThumbnailRenderer")
             ?.optJSONObject("thumbnail")
             ?.optJSONArray("thumbnails")
-        val plain = item.optJSONObject("thumbnail")
+        val plain = thumbnail?.optJSONArray("thumbnails")
+        val renderer = item.optJSONObject("thumbnailRenderer")
+        val rendererDirect = renderer
+            ?.optJSONObject("musicThumbnailRenderer")
+            ?.optJSONObject("thumbnail")
             ?.optJSONArray("thumbnails")
-        return bestThumbnail(direct) ?: bestThumbnail(plain)
+        val rendererPlain = renderer?.optJSONArray("thumbnails")
+        return bestThumbnail(direct)
+            ?: bestThumbnail(plain)
+            ?: bestThumbnail(rendererDirect)
+            ?: bestThumbnail(rendererPlain)
     }
 
     private fun bestThumbnail(array: JSONArray?): String? {
