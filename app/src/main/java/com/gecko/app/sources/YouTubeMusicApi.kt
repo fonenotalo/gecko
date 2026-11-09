@@ -174,10 +174,10 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         return withContext(Dispatchers.IO) {
             withTimeoutOrNull(30_000L) {
                 // Tenta ANDROID_MUSIC primeiro
-                var result = tryPlayback(baseUrl, videoId, quality, clientName = "ANDROID_MUSIC", clientVersion = cfgVersionOrFallback())
+                var result = tryPlayback(baseUrl, videoId, quality, clientName = "ANDROID_MUSIC", clientVersion = cfgVersionOrFallback(baseUrl))
                 if (result == null || result.streamUrl.isNullOrBlank()) {
                     // Fallback para WEB_REMIX (funciona sem poToken em muitos casos)
-                    result = tryPlayback(baseUrl, videoId, quality, clientName = "WEB_REMIX", clientVersion = cfgVersionOrFallback())
+                    result = tryPlayback(baseUrl, videoId, quality, clientName = "WEB_REMIX", clientVersion = cfgVersionOrFallback(baseUrl))
                 }
                 result
             }
@@ -219,8 +219,8 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         )
     }
 
-    private suspend fun cfgVersionOrFallback(): String {
-        val cfg = config()
+    private suspend fun cfgVersionOrFallback(baseUrl: String): String {
+        val cfg = config(baseUrl)
         return cfg.version.takeIf { it.isNotBlank() } ?: FALLBACK_CLIENT_VERSION
     }
 
