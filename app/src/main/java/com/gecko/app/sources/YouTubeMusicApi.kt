@@ -19,13 +19,11 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
 /**
- * Cliente da API pública do YouTube Music (InnerTube), com fluxo estilo NewPipe:
+ * Cliente da API pública do YouTube Music (InnerTube).
  *
- * - Usa cliente `ANDROID_MUSIC` no endpoint `player` (mais confiável para áudio).
- * - Suporta `poToken` para requisições que exigem prova de origem.
- * - Faz decipher de `signatureCipher` baixando o `base.js` do YouTube e aplicando
- *   as operações (reverse, swap, slice) sobre a assinatura cifrada — igual o NewPipe.
- * - Quando o endpoint devolve URL direta, usa direto; caso contrário, descifra.
+ * Tenta o cliente `ANDROID_MUSIC` primeiro (mais confiável para áudio),
+ * com fallback para `WEB_REMIX` quando o YouTube não libera o stream sem
+ * autenticação/PO token.
  */
 class YouTubeMusicApi(private val client: OkHttpClient) {
 
@@ -175,34 +173,55 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         if (videoId.isBlank()) return null
         return withContext(Dispatchers.IO) {
             withTimeoutOrNull(30_000L) {
-                val extra = JSONObject().apply {
-                    put("videoId", videoId)
-                    put("contentCheckOk", true)
-                    put("racyCheckOk", true)
-                    put(
-                        "playbackContext",
-                        JSONObject().put(
-                            "contentPlaybackContext",
-                            JSONObject().put("html5Preference", "HTML5_PREF_WANTS"),
-                        ),
-                    )
+                // Tenta ANDROID_MUSIC primeiro
+                var result = tryPlayback(baseUrl, videoId, quality, clientName = "ANDROID_MUSIC", clientVersion = cfgVersionOrFallback())
+                if (result == null || result.streamUrl.isNullOrBlank()) {
+                    // Fallback para WEB_REMIX (funciona sem poToken em muitos casos)
+                    result = tryPlayback(baseUrl, videoId, quality, clientName = "WEB_REMIX", clientVersion = cfgVersionOrFallback())
                 }
-                val root = post(baseUrl, "player", extra) ?: return@withTimeoutOrNull null
-                val details = root.optJSONObject("videoDetails")
-                val status = root.optJSONObject("playabilityStatus")?.optString("status")
-                val streaming = root.optJSONObject("streamingData")
-                YouTubePlayback(
-                    title = details?.optString("title").orEmpty(),
-                    artist = details?.optString("author").orEmpty(),
-                    durationMs = (details?.optString("lengthSeconds")?.toLongOrNull() ?: 0L) * 1000L,
-                    artworkUrl = details?.optJSONObject("thumbnail")
-                        ?.optJSONArray("thumbnails")
-                        ?.let(::bestThumbnail),
-                    streamUrl = streaming?.let { resolveAudioUrl(it, quality) },
-                    status = status,
-                )
+                result
             }
         }
+    }
+
+    private suspend fun tryPlayback(
+        baseUrl: String,
+        videoId: String,
+        quality: AudioQuality,
+        clientName: String,
+        clientVersion: String?,
+    ): YouTubePlayback? {
+        val extra = JSONObject().apply {
+            put("videoId", videoId)
+            put("contentCheckOk", true)
+            put("racyCheckOk", true)
+            put(
+                "playbackContext",
+                JSONObject().put(
+                    "contentPlaybackContext",
+                    JSONObject().put("html5Preference", "HTML5_PREF_WANTS"),
+                ),
+            )
+        }
+        val root = postWithClient(baseUrl, "player", extra, clientName, clientVersion) ?: return null
+        val details = root.optJSONObject("videoDetails")
+        val status = root.optJSONObject("playabilityStatus")?.optString("status")
+        val streaming = root.optJSONObject("streamingData")
+        YouTubePlayback(
+            title = details?.optString("title").orEmpty(),
+            artist = details?.optString("author").orEmpty(),
+            durationMs = (details?.optString("lengthSeconds")?.toLongOrNull() ?: 0L) * 1000L,
+            artworkUrl = details?.optJSONObject("thumbnail")
+                ?.optJSONArray("thumbnails")
+                ?.let(::bestThumbnail),
+            streamUrl = streaming?.let { resolveAudioUrl(it, quality) },
+            status = status,
+        )
+    }
+
+    private suspend fun cfgVersionOrFallback(): String {
+        val cfg = config()
+        return cfg.version.takeIf { it.isNotBlank() } ?: FALLBACK_CLIENT_VERSION
     }
 
     suspend fun streamUrl(
@@ -231,7 +250,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
     ): JSONObject? {
         val current = config()
         val payload = JSONObject().apply {
-            put("context", contextJson(current))
+            put("context", contextJson(current, "WEB_REMIX"))
             val keys = extra.keys()
             while (keys.hasNext()) {
                 val key = keys.next()
@@ -241,20 +260,63 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         return execute(endpointUrl(baseUrl, endpoint, current.key), payload, current)
     }
 
+    private suspend fun postWithClient(
+        baseUrl: String,
+        endpoint: String,
+        extra: JSONObject,
+        clientName: String,
+        clientVersion: String,
+    ): JSONObject? {
+        val current = config()
+        val version = clientVersion.takeIf { it.isNotBlank() } ?: current.version
+        val payload = JSONObject().apply {
+            put("context", contextJson(current.copy(version = version), clientName))
+            val keys = extra.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                put(key, extra.opt(key))
+            }
+        }
+        return executeWithClient(
+            endpointUrl(baseUrl, endpoint, current.key),
+            payload,
+            current,
+            clientName,
+        )
+    }
+
     private fun execute(url: String, payload: JSONObject, cfg: ApiConfig): JSONObject? {
+        return executeWithClient(url, payload, cfg, "WEB_REMIX")
+    }
+
+    private fun executeWithClient(
+        url: String,
+        payload: JSONObject,
+        cfg: ApiConfig,
+        clientName: String,
+    ): JSONObject? {
+        val clientNameId = when (clientName) {
+            "ANDROID_MUSIC" -> "21"
+            "WEB_REMIX" -> "67"
+            else -> "67"
+        }
+        val userAgent = when (clientName) {
+            "ANDROID_MUSIC" -> ANDROID_USER_AGENT
+            else -> WEB_USER_AGENT
+        }
         val builder = Request.Builder()
             .url(url)
             .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
             .header("Accept", "application/json")
-            .header("X-YouTube-Client-Name", CLIENT_NAME_ID)
+            .header("X-YouTube-Client-Name", clientNameId)
             .header("X-YouTube-Client-Version", cfg.version)
             .header("Origin", "https://music.youtube.com")
             .header("Referer", "https://music.youtube.com/")
-            .header("User-Agent", ANDROID_USER_AGENT)
+            .header("User-Agent", userAgent)
         if (cfg.visitorData.isNotBlank()) {
             builder.header("X-Goog-Visitor-Id", cfg.visitorData)
         }
-        if (cfg.poToken.isNotBlank()) {
+        if (cfg.poToken.isNotBlank() && clientName == "ANDROID_MUSIC") {
             builder.header("X-Goog-Page-Id", cfg.poToken)
         }
         return runCatching {
@@ -295,7 +357,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         val html = runCatching {
             val request = Request.Builder()
                 .url(HOME_URL)
-                .header("User-Agent", ANDROID_USER_AGENT)
+                .header("User-Agent", WEB_USER_AGENT)
                 .header("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8")
                 .build()
             apiClient.newCall(request).execute().use { response ->
@@ -307,7 +369,6 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         val key = API_KEY_PATTERN.find(html)?.groupValues?.getOrNull(1)
         val version = CLIENT_VERSION_PATTERN.find(html)?.groupValues?.getOrNull(1)
         val visitor = VISITOR_DATA_PATTERN.find(html)?.groupValues?.getOrNull(1)
-        val po = POTOKEN_PATTERN.find(html)?.groupValues?.getOrNull(1)
         val decodedVisitor = visitor
             ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
             .orEmpty()
@@ -316,7 +377,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
             key = key?.takeIf { it.isNotBlank() } ?: FALLBACK_API_KEY,
             version = version?.takeIf { it.isNotBlank() } ?: FALLBACK_CLIENT_VERSION,
             visitorData = decodedVisitor,
-            poToken = po.orEmpty(),
+            poToken = "",
             fetchedAt = System.currentTimeMillis(),
         )
     }
@@ -332,20 +393,24 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         return "$root/${endpoint.trimStart('/')}?key=$apiKey&prettyPrint=false"
     }
 
-    private fun contextJson(cfg: ApiConfig): JSONObject = JSONObject().apply {
+    private fun contextJson(cfg: ApiConfig, clientName: String): JSONObject = JSONObject().apply {
         put(
             "client",
             JSONObject().apply {
-                put("clientName", CLIENT_NAME)
+                put("clientName", clientName)
                 put("clientVersion", cfg.version)
                 put("hl", "pt-BR")
                 put("gl", "BR")
-                put("androidSdkVersion", 33)
-                put("device", "generic_x86_64")
+                if (clientName == "ANDROID_MUSIC") {
+                    put("androidSdkVersion", 33)
+                    put("device", "generic_x86_64")
+                }
                 if (cfg.visitorData.isNotBlank()) put("visitorData", cfg.visitorData)
             },
         )
-        if (cfg.poToken.isNotBlank()) put("thirdParty", JSONObject().put("poToken", cfg.poToken))
+        if (cfg.poToken.isNotBlank() && clientName == "ANDROID_MUSIC") {
+            put("thirdParty", JSONObject().put("poToken", cfg.poToken))
+        }
     }
 
     // ----------------------------------------------------------------- parsers
@@ -607,8 +672,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
 
     /**
      * Escolhe o melhor formato de áudio. Quando só há `signatureCipher` (sem `url` direta),
-     * faz o decipher igual o NewPipe: baixa o `base.js`, extrai as operações e aplica na
-     * assinatura `s`, montando a URL final.
+     * tenta o decipher igual o NewPipe.
      */
     private suspend fun resolveAudioUrl(streaming: JSONObject, quality: AudioQuality): String? {
         val formats = mutableListOf<JSONObject>()
@@ -644,11 +708,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
     }
 
     /**
-     * Decifra uma `signatureCipher` do YouTube:
-     * 1. Faz parse dos parâmetros `url`, `sp` e `s`.
-     * 2. Carrega as operações de cipher do `base.js` (cacheado).
-     * 3. Aplica as operações na string `s`.
-     * 4. Monta a URL final: `{url}&{sp}={assinatura_decifrada}`.
+     * Decifra uma `signatureCipher` do YouTube.
      */
     private suspend fun decipherSignature(cipher: String): String? {
         val params = cipher.split("&").associate { val p = it.split("=", limit = 2); p.first() to p.last() }
@@ -690,7 +750,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         val html = runCatching {
             val request = Request.Builder()
                 .url("https://www.youtube.com/")
-                .header("User-Agent", ANDROID_USER_AGENT)
+                .header("User-Agent", WEB_USER_AGENT)
                 .build()
             apiClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) response.body?.string().orEmpty() else ""
@@ -703,7 +763,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         val js = runCatching {
             val request = Request.Builder()
                 .url(jsUrl)
-                .header("User-Agent", ANDROID_USER_AGENT)
+                .header("User-Agent", WEB_USER_AGENT)
                 .build()
             apiClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) response.body?.string().orEmpty() else ""
@@ -898,12 +958,13 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         }
 
         private const val HOME_URL = "https://music.youtube.com/"
-        private const val CLIENT_NAME = "ANDROID_MUSIC"
-        private const val CLIENT_NAME_ID = "21"
+        private const val WEB_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
         private const val ANDROID_USER_AGENT =
             "com.google.android.apps.youtube.music/6.31 (Linux; U; Android 13) gzip"
         private const val FALLBACK_API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
-        private const val FALLBACK_CLIENT_VERSION = "6.31"
+        private const val FALLBACK_CLIENT_VERSION = "1.20261104.00.00"
         private const val CONFIG_TTL_MS = 6 * 60 * 60 * 1000L
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private val API_KEY_PATTERN = Regex("\"INNERTUBE_API_KEY\":\"([^\"]+)\"")
