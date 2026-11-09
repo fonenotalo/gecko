@@ -21,12 +21,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.PlaylistPlay
-import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material3.DropdownMenu
@@ -200,7 +200,7 @@ private fun TrackMenu(track: Track, actions: TrackActions) {
                 DropdownMenuItem(
                     text = { Text("Adicionar à fila") },
                     leadingIcon = {
-                        Icon(Icons.Rounded.QueueMusic, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = null)
                     },
                     onClick = {
                         expanded = false
@@ -248,7 +248,7 @@ private fun TrackMenu(track: Track, actions: TrackActions) {
                 DropdownMenuItem(
                     text = { Text("Nenhuma ação") },
                     leadingIcon = {
-                        Icon(Icons.Rounded.PlaylistPlay, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Rounded.PlaylistPlay, contentDescription = null)
                     },
                     onClick = { expanded = false },
                 )

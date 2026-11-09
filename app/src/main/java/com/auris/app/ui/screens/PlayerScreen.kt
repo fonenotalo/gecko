@@ -28,13 +28,13 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Shuffle
@@ -336,7 +336,7 @@ fun PlayerScreen(
                 PlayerAction(
                     icon = {
                         Icon(
-                            Icons.Rounded.QueueMusic,
+                            Icons.AutoMirrored.Rounded.QueueMusic,
                             contentDescription = null,
                             tint = scheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp),
@@ -746,7 +746,7 @@ private fun QueueSheetContent(
 }
 
 private fun currentLineIndex(lines: List<LyricLine>, positionMs: Long): Int =
-    lines.indexOfLast { it.timeMs <= positionMs }.coerceAtLeast(0)
+    if (lines.isEmpty()) -1 else lines.indexOfLast { it.timeMs <= positionMs }.coerceAtLeast(0)
 
 @Composable
 private fun LyricsSheetContent(
@@ -756,15 +756,14 @@ private fun LyricsSheetContent(
     onRemove: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val synced = lyrics?.synced == true
-    val currentIndex = if (synced && lyrics != null) {
+    val currentIndex = if (lyrics != null && lyrics.synced) {
         currentLineIndex(lyrics.lines, positionMs)
     } else {
         -1
     }
     val listState = rememberLazyListState()
     LaunchedEffect(currentIndex) {
-        if (currentIndex >= 0 && lyrics != null) {
+        if (currentIndex >= 0 && lyrics != null && lyrics.lines.isNotEmpty()) {
             listState.animateScrollToItem(currentIndex.coerceIn(0, lyrics.lines.lastIndex))
         }
     }

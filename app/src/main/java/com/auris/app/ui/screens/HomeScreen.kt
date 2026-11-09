@@ -28,8 +28,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Headphones
@@ -321,7 +321,7 @@ fun HomeScreen(
                         Text("Ver as ${library.tracks.size} músicas")
                         Spacer(Modifier.width(4.dp))
                         Icon(
-                            Icons.Rounded.ArrowForward,
+                            Icons.AutoMirrored.Rounded.ArrowForward,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
                         )
@@ -655,7 +655,7 @@ private fun SourceCard(configured: Boolean, pluginCount: Int, onClick: () -> Uni
             )
             Spacer(Modifier.width(6.dp))
             Icon(
-                Icons.Rounded.ArrowForward,
+                Icons.AutoMirrored.Rounded.ArrowForward,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(17.dp),
