@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -208,7 +209,7 @@ fun IpodScreen(
             ) {
                 IconButton(onClick = { goBack() }, modifier = Modifier.size(38.dp)) {
                     Icon(
-                        Icons.Rounded.SkipPrevious,
+                        Icons.Rounded.ArrowBack,
                         contentDescription = "Voltar",
                         tint = scheme.onSurface,
                         modifier = Modifier.size(20.dp),
@@ -500,7 +501,7 @@ private fun ClickWheel(
                     val dy = offset.y - cy
                     val distance = sqrt(dx * dx + dy * dy)
                     val outer = size.width / 2f
-                    if (distance <= outer * 0.34f) {
+                    if (distance <= outer * 0.54f) {
                         onSelect()
                     } else {
                         val angle = atan2(dy, dx) * 180f / PI.toFloat()
