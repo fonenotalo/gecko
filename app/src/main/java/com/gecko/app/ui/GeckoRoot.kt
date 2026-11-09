@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import android.app.Activity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -39,6 +40,7 @@ import com.gecko.app.ui.screens.IpodScreen
 import com.gecko.app.ui.screens.KaraokeScreen
 import com.gecko.app.ui.screens.LibraryScreen
 import com.gecko.app.ui.screens.PlayerScreen
+import com.gecko.app.integrations.DiscordLoginActivity
 import com.gecko.app.ui.screens.SettingsScreen
 import com.gecko.app.ui.theme.GeckoTheme
 
@@ -215,6 +217,16 @@ private fun GeckoNavHost(
         }
 
         composable(Routes.SETTINGS) {
+            val context = LocalContext.current
+            val discordLoginLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult(),
+            ) { result ->
+                if (result.resultCode == Activity.RESULT_OK) {
+                    result.data?.getStringExtra(DiscordLoginActivity.EXTRA_TOKEN)?.let { token ->
+                        viewModel.updateSettings { it.copy(discordToken = token) }
+                    }
+                }
+            }
             SettingsScreen(
                 settings = settings,
                 plugins = plugins,
@@ -228,6 +240,9 @@ private fun GeckoNavHost(
                 onTestLastFm = viewModel::testLastFmSession,
                 onGenerateDemo = viewModel::generateDemo,
                 onRemoveDemo = viewModel::removeDemo,
+                onLoginDiscord = {
+                    discordLoginLauncher.launch(DiscordLoginActivity.createIntent(context))
+                },
             )
         }
 

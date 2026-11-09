@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.gecko.app.BuildConfig
+import com.gecko.app.integrations.DiscordLoginActivity
 import com.gecko.app.model.AppSettings
 import com.gecko.app.model.DEFAULT_YT_MUSIC_API
 import com.gecko.app.model.LyricsProviderId
@@ -81,6 +82,7 @@ fun SettingsScreen(
     onTestLastFm: () -> Unit,
     onGenerateDemo: () -> Unit,
     onRemoveDemo: () -> Unit,
+    onLoginDiscord: () -> Unit,
 ) {
     var showTheme by remember { mutableStateOf(false) }
     var showStyle by remember { mutableStateOf(false) }
@@ -510,11 +512,39 @@ fun SettingsScreen(
                         onUpdate { it.copy(discordBridgeUrl = value.trim()) }
                     },
                 )
+                SettingTextField(
+                    title = "Token do Discord (opcional)",
+                    value = settings.discordToken,
+                    placeholder = "Cole o token da sua conta aqui",
+                    onChange = { value ->
+                        onUpdate { it.copy(discordToken = value.trim()) }
+                    },
+                    helper = "Usado para presença direta via gateway. Sem ele, a bridge é usada.",
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.weight(1f)) {
+                        Text(
+                            text = "O WebView pode não capturar o token automaticamente " +
+                                "(HttpOnly, 2FA, CAPTCHA). Cole manualmente se falhar.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    TextButton(onClick = onLoginDiscord) {
+                        Text("Entrar no Discord")
+                    }
+                }
                 Box(Modifier.padding(14.dp)) {
                     InfoBanner(
                         text = "O Discord não expõe Rich Presence para apps Android de terceiros. " +
                             "O Gecko envia a faixa atual para uma bridge que você mantém em um computador " +
-                            "com o Discord conectado.",
+                            "com o Discord conectado, ou direto pelo gateway com o seu próprio token.",
                         tone = MaterialTheme.colorScheme.tertiary,
                     )
                 }

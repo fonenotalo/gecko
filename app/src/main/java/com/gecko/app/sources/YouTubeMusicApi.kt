@@ -19,16 +19,13 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
 /**
- * Cliente da API pública do YouTube Music (InnerTube).
+ * Cliente da API pública do YouTube Music (InnerTube), com fluxo estilo NewPipe:
  *
- * Usa os endpoints `search`, `browse`, `player`, `next`, `music/get_queue` e
- * `music/get_search_suggestions`. A chave e a versão do cliente são descobertas
- * na página inicial do YouTube Music e renovadas periodicamente; se a descoberta
- * falhar, valores de fallback mantêm a busca funcionando até a próxima tentativa.
- *
- * O app não faz decipher de assinatura, não usa PO token e não contorna DRM.
- * Quando o endpoint `player` devolve uma URL de áudio utilizável, ela é usada;
- * caso contrário, a reprodução pode ser feita por uma ponte configurada.
+ * - Usa cliente `ANDROID_MUSIC` no endpoint `player` (mais confiável para áudio).
+ * - Suporta `poToken` para requisições que exigem prova de origem.
+ * - Faz decipher de `signatureCipher` baixando o `base.js` do YouTube e aplicando
+ *   as operações (reverse, swap, slice) sobre a assinatura cifrada — igual o NewPipe.
+ * - Quando o endpoint devolve URL direta, usa direto; caso contrário, descifra.
  */
 class YouTubeMusicApi(private val client: OkHttpClient) {
 
@@ -49,11 +46,6 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         val artworkUrl: String?,
     )
 
-    /**
-     * Página de um álbum, artista ou playlist decomposta em faixas e itens
-     * relacionados. [items] permite continuar navegando por álbuns, artistas e
-     * playlists encontrados nessa página.
-     */
     data class BrowsePage(
         val title: String?,
         val subtitle: String?,
@@ -73,9 +65,13 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         .build()
 
     private val configLock = Mutex()
+    @Volatile private var config: ApiConfig? = null
 
-    @Volatile
-    private var config: ApiConfig? = null
+    // Cache do decipher de assinatura (base.js)
+    private val cipherLock = Mutex()
+    @Volatile private var cipherOps: List<CipherOp>? = null
+    @Volatile private var cipherFetchedAt = 0L
+    private const val CIPHER_TTL_MS = 12 * 60 * 60 * 1000L
 
     suspend fun search(baseUrl: String, query: String): SearchResult {
         val trimmed = query.trim()
@@ -129,10 +125,6 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         }
     }
 
-    /**
-     * Rádio/mix a partir de uma faixa. O YouTube Music usa `RDAMVM{videoId}`
-     * como playlist de rádio quando nenhum playlistId é informado.
-     */
     suspend fun next(
         baseUrl: String,
         videoId: String,
@@ -175,11 +167,6 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         }
     }
 
-    /**
-     * Consulta o endpoint `player`. Devolve metadados mesmo quando o vídeo está
-     * indisponível; [YouTubePlayback.streamUrl] fica nulo se o YouTube não
-     * entregar uma URL de áudio direta (situação comum sem login/PO token).
-     */
     suspend fun playback(
         baseUrl: String,
         videoId: String,
@@ -211,7 +198,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
                     artworkUrl = details?.optJSONObject("thumbnail")
                         ?.optJSONArray("thumbnails")
                         ?.let(::bestThumbnail),
-                    streamUrl = streaming?.let { bestAudioUrl(it, quality) },
+                    streamUrl = streaming?.let { resolveAudioUrl(it, quality) },
                     status = status,
                 )
             }
@@ -263,9 +250,12 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
             .header("X-YouTube-Client-Version", cfg.version)
             .header("Origin", "https://music.youtube.com")
             .header("Referer", "https://music.youtube.com/")
-            .header("User-Agent", USER_AGENT)
+            .header("User-Agent", ANDROID_USER_AGENT)
         if (cfg.visitorData.isNotBlank()) {
             builder.header("X-Goog-Visitor-Id", cfg.visitorData)
+        }
+        if (cfg.poToken.isNotBlank()) {
+            builder.header("X-Goog-Page-Id", cfg.poToken)
         }
         return runCatching {
             apiClient.newCall(builder.build()).execute().use { response ->
@@ -299,12 +289,13 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
             key = FALLBACK_API_KEY,
             version = FALLBACK_CLIENT_VERSION,
             visitorData = "",
+            poToken = "",
             fetchedAt = System.currentTimeMillis(),
         )
         val html = runCatching {
             val request = Request.Builder()
                 .url(HOME_URL)
-                .header("User-Agent", USER_AGENT)
+                .header("User-Agent", ANDROID_USER_AGENT)
                 .header("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8")
                 .build()
             apiClient.newCall(request).execute().use { response ->
@@ -316,6 +307,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         val key = API_KEY_PATTERN.find(html)?.groupValues?.getOrNull(1)
         val version = CLIENT_VERSION_PATTERN.find(html)?.groupValues?.getOrNull(1)
         val visitor = VISITOR_DATA_PATTERN.find(html)?.groupValues?.getOrNull(1)
+        val po = POTOKEN_PATTERN.find(html)?.groupValues?.getOrNull(1)
         val decodedVisitor = visitor
             ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
             .orEmpty()
@@ -324,6 +316,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
             key = key?.takeIf { it.isNotBlank() } ?: FALLBACK_API_KEY,
             version = version?.takeIf { it.isNotBlank() } ?: FALLBACK_CLIENT_VERSION,
             visitorData = decodedVisitor,
+            poToken = po.orEmpty(),
             fetchedAt = System.currentTimeMillis(),
         )
     }
@@ -343,13 +336,16 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         put(
             "client",
             JSONObject().apply {
-                put("clientName", "WEB_REMIX")
+                put("clientName", CLIENT_NAME)
                 put("clientVersion", cfg.version)
                 put("hl", "pt-BR")
                 put("gl", "BR")
+                put("androidSdkVersion", 33)
+                put("device", "generic_x86_64")
                 if (cfg.visitorData.isNotBlank()) put("visitorData", cfg.visitorData)
             },
         )
+        if (cfg.poToken.isNotBlank()) put("thirdParty", JSONObject().put("poToken", cfg.poToken))
     }
 
     // ----------------------------------------------------------------- parsers
@@ -609,7 +605,12 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         )
     }
 
-    private fun bestAudioUrl(streaming: JSONObject, quality: AudioQuality): String? {
+    /**
+     * Escolhe o melhor formato de áudio. Quando só há `signatureCipher` (sem `url` direta),
+     * faz o decipher igual o NewPipe: baixa o `base.js`, extrai as operações e aplica na
+     * assinatura `s`, montando a URL final.
+     */
+    private fun resolveAudioUrl(streaming: JSONObject, quality: AudioQuality): String? {
         val formats = mutableListOf<JSONObject>()
         for (key in listOf("adaptiveFormats", "formats")) {
             val array = streaming.optJSONArray(key) ?: continue
@@ -618,8 +619,8 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
             }
         }
         val audio = formats.filter {
-            it.optString("mimeType").startsWith("audio/") &&
-                it.optString("url").isNotBlank()
+            val mime = it.optString("mimeType")
+            mime.startsWith("audio/") && (it.optString("url").isNotBlank() || it.optString("signatureCipher").isNotBlank())
         }
         if (audio.isEmpty()) return null
 
@@ -634,8 +635,127 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         val chosen = pool.minByOrNull {
             abs(it.optInt("bitrate", 0).toLong() - target.toLong())
         } ?: pool.first()
-        return chosen.optString("url").takeIf { it.isNotBlank() }
+
+        val directUrl = chosen.optString("url").takeIf { it.isNotBlank() }
+        if (directUrl != null) return directUrl
+
+        val cipher = chosen.optString("signatureCipher").takeIf { it.isNotBlank() } ?: return null
+        return decipherSignature(cipher)
     }
+
+    /**
+     * Decifra uma `signatureCipher` do YouTube:
+     * 1. Faz parse dos parâmetros `url`, `sp` e `s`.
+     * 2. Carrega as operações de cipher do `base.js` (cacheado).
+     * 3. Aplica as operações na string `s`.
+     * 4. Monta a URL final: `{url}&{sp}={assinatura_decifrada}`.
+     */
+    private suspend fun decipherSignature(cipher: String): String? {
+        val params = cipher.split("&").associateWith { it.split("=", limit = 2) }
+        val url = params.getOrNull("url")?.firstOrNull() ?: return null
+        val sp = params.getOrNull("sp")?.firstOrNull() ?: "sig"
+        val s = params.getOrNull("s")?.firstOrNull() ?: return null
+
+        val ops = loadCipherOps() ?: return null
+        var signature = s
+        for (op in ops) {
+            signature = op.apply(signature)
+        }
+
+        return "$url&$sp=$signature"
+    }
+
+    /**
+     * Carrega as operações de cipher do `base.js` do YouTube, cacheando por TTL.
+     */
+    private suspend fun loadCipherOps(): List<CipherOp>? {
+        val now = System.currentTimeMillis()
+        if (cipherOps != null && now - cipherFetchedAt < CIPHER_TTL_MS) {
+            return cipherOps
+        }
+        return cipherLock.withLock {
+            if (cipherOps != null && now - cipherFetchedAt < CIPHER_TTL_MS) {
+                cipherOps
+            } else {
+                val ops = fetchCipherOps().also {
+                    cipherOps = it
+                    cipherFetchedAt = System.currentTimeMillis()
+                }
+                ops
+            }
+        }
+    }
+
+    private suspend fun fetchCipherOps(): List<CipherOp>? = withContext(Dispatchers.IO) {
+        val html = runCatching {
+            val request = Request.Builder()
+                .url("https://www.youtube.com/")
+                .header("User-Agent", ANDROID_USER_AGENT)
+                .build()
+            apiClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) response.body?.string().orEmpty() else ""
+            }
+        }.getOrDefault("")
+        val playerVersion = PLAYER_VERSION_PATTERN.find(html)?.groupValues?.getOrNull(1)
+        if (playerVersion.isNullOrBlank()) return@withContext null
+
+        val jsUrl = "https://www.youtube.com/s/player/$playerVersion/base.js"
+        val js = runCatching {
+            val request = Request.Builder()
+                .url(jsUrl)
+                .header("User-Agent", ANDROID_USER_AGENT)
+                .build()
+            apiClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) response.body?.string().orEmpty() else ""
+            }
+        }.getOrDefault("")
+        if (js.isBlank()) return@withContext null
+
+        val cipherFn = CIPHER_FUNCTION_PATTERN.find(js)?.groupValues?.getOrNull(1) ?: return@withContext null
+
+        val ops = mutableListOf<CipherOp>()
+        val opRegex = Regex("(?:\\)\\.)?(reverse|swap|slice)\\(\\s*(\\d+)?\\s*\\)")
+        for (m in opRegex.findAll(cipherFn)) {
+            when (m.groupValues[1]) {
+                "reverse" -> ops.add(CipherOp.Reverse)
+                "swap" -> {
+                    val pos = m.groupValues[2].toIntOrNull() ?: 0
+                    ops.add(CipherOp.Swap(pos))
+                }
+                "slice" -> {
+                    val pos = m.groupValues[2].toIntOrNull() ?: 0
+                    ops.add(CipherOp.Slice(pos))
+                }
+            }
+        }
+        return@withContext ops.takeIf { it.isNotEmpty() } ?: null
+    }
+
+    // --------------------------------------------------------------- cipher ops
+
+    sealed class CipherOp {
+        object Reverse : CipherOp()
+        data class Swap(val pos: Int) : CipherOp()
+        data class Slice(val pos: Int) : CipherOp()
+    }
+
+    private fun CipherOp.apply(s: String): String = when (this) {
+        is CipherOp.Reverse -> s.reversed()
+        is CipherOp.Swap -> {
+            val chars = s.toCharArray()
+            if (chars.size > pos) {
+                val tmp = chars[0]
+                chars[0] = chars[pos]
+                chars[pos] = tmp
+            }
+            chars.joinToString("")
+        }
+        is CipherOp.Slice -> {
+            if (pos >= s.length) "" else s.substring(pos)
+        }
+    }
+
+    // --------------------------------------------------------------- parsers (cont.)
 
     private fun textRuns(obj: JSONObject?): List<JSONObject> {
         val array = obj?.optJSONArray("runs") ?: return emptyList()
@@ -756,6 +876,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         val key: String,
         val version: String,
         val visitorData: String,
+        val poToken: String,
         val fetchedAt: Long,
     )
 
@@ -777,28 +898,24 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
         }
 
         private const val HOME_URL = "https://music.youtube.com/"
-        private const val CLIENT_NAME_ID = "67"
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+        private const val CLIENT_NAME = "ANDROID_MUSIC"
+        private const val CLIENT_NAME_ID = "21"
+        private const val ANDROID_USER_AGENT =
+            "com.google.android.apps.youtube.music/6.31 (Linux; U; Android 13) gzip"
         private const val FALLBACK_API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
-        private const val FALLBACK_CLIENT_VERSION = "1.20261104.00.00"
+        private const val FALLBACK_CLIENT_VERSION = "6.31"
         private const val CONFIG_TTL_MS = 6 * 60 * 60 * 1000L
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private val API_KEY_PATTERN = Regex("\"INNERTUBE_API_KEY\":\"([^\"]+)\"")
         private val CLIENT_VERSION_PATTERN = Regex("\"INNERTUBE_CLIENT_VERSION\":\"([^\"]+)\"")
         private val VISITOR_DATA_PATTERN = Regex("\"VISITOR_DATA\":\"([^\"]+)\"")
+        private val POTOKEN_PATTERN = Regex("\"PO_TOKEN\":\"([^\"]+)\"")
+        private val PLAYER_VERSION_PATTERN = Regex("\"playerVersion\":\"([^\"]+)\"")
+        private val CIPHER_FUNCTION_PATTERN = Regex("function\\s*\\w+\\s*\\(\\s*a\\s*\\)\\s*\\{([^}]+)\\}")
         private val DURATION_PATTERN = Regex("^(?:(\\d+):)?(\\d{1,2}):(\\d{2})$")
         private val DURATION_PLAIN_PATTERN = Regex("^(?:(\\d+):)?\\d{1,2}:\\d{2}$")
         private val MUSIC_LABELS = setOf(
-            "Música",
-            "Vídeo",
-            "Álbum",
-            "Single",
-            "EP",
-            "Artista",
-            "Playlist",
-            "Podcast",
+            "Música", "Vídeo", "Álbum", "Single", "EP", "Artista", "Playlist", "Podcast",
         )
     }
 }

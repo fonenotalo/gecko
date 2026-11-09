@@ -72,6 +72,7 @@ data class AppSettings(
     val lastFmSessionKey: String = "",
     val discordEnabled: Boolean = false,
     val discordBridgeUrl: String = "",
+    val discordToken: String = "",
 )
 
 /** Colors extracted from the current album artwork. Stored as ARGB ints. */
