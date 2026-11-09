@@ -12,6 +12,8 @@ import com.gecko.app.data.RecentStore
 import com.gecko.app.data.SettingsRepository
 import com.gecko.app.integrations.DiscordPresenceClient
 import com.gecko.app.integrations.LastFmClient
+import com.gecko.app.lyrics.LyricsResolver
+import com.gecko.app.lyrics.SimpMusicLyricsProvider
 import com.gecko.app.playback.PlayerController
 import com.gecko.app.sources.PluginRepository
 import com.gecko.app.sources.YouTubeMusicApi
@@ -33,6 +35,10 @@ class AppContainer(private val app: Application) {
     val localMusic = LocalMusicRepository(app)
     val artwork = ArtworkStore(app)
     val lyrics = LyricsRepository(app)
+    val lyricsResolver = LyricsResolver(
+        local = lyrics,
+        providers = listOf(SimpMusicLyricsProvider(httpClient)),
+    )
     val downloads = DownloadRepository(app, httpClient)
     val recent = RecentStore(app)
     val plugins = PluginRepository(app, httpClient)

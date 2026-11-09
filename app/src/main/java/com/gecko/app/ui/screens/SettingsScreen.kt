@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import com.gecko.app.BuildConfig
 import com.gecko.app.model.AppSettings
 import com.gecko.app.model.DEFAULT_YT_MUSIC_API
+import com.gecko.app.model.LyricsProviderId
 import com.gecko.app.model.ThemeMode
 import com.gecko.app.model.ThemeStyle
 import com.gecko.app.sources.SourcePlugin
@@ -73,6 +74,7 @@ fun SettingsScreen(
     bridgeStatus: BridgeStatus,
     hasDemo: Boolean,
     onUpdate: ((AppSettings) -> AppSettings) -> Unit,
+    onToggleLyricsProvider: (LyricsProviderId, Boolean) -> Unit,
     onImportPlugin: (android.net.Uri) -> Unit,
     onRemovePlugin: (SourcePlugin) -> Unit,
     onTestYouTubeMusic: () -> Unit,
@@ -234,6 +236,37 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+        }
+
+        item {
+            SettingsGroup(title = "Provedores de letras") {
+                Box(Modifier.padding(14.dp)) {
+                    InfoBanner(
+                        text = "Mais provedores serão adicionados nesta aba em breve. " +
+                            "Por enquanto, o SimpMusic Lyrics é o único provedor disponível.",
+                        tone = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+                LyricsProviderId.entries.forEachIndexed { index, provider ->
+                    if (index > 0) GroupDivider()
+                    SettingSwitchRow(
+                        title = provider.title,
+                        subtitle = provider.subtitle,
+                        checked = provider.storageKey in settings.lyricsProviders,
+                        onCheckedChange = { enabled ->
+                            onToggleLyricsProvider(provider, enabled)
+                        },
+                    )
+                }
+                GroupDivider()
+                Text(
+                    text = "Letras importadas ou já baixadas permanecem salvas no aparelho mesmo " +
+                        "com todos os provedores desligados.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                )
             }
         }
 

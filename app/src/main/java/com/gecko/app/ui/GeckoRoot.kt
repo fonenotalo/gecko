@@ -209,6 +209,7 @@ private fun GeckoNavHost(
                 bridgeStatus = bridgeStatus,
                 hasDemo = library.hasDemo,
                 onUpdate = viewModel::updateSettings,
+                onToggleLyricsProvider = viewModel::setLyricsProviderEnabled,
                 onImportPlugin = viewModel::importPlugin,
                 onRemovePlugin = viewModel::removePlugin,
                 onTestYouTubeMusic = viewModel::testYouTubeMusic,

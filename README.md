@@ -12,7 +12,8 @@ Gecko toca a sua biblioteca local, aceita fontes lossless adicionais por complem
 - **Player completo** com arte grande, paleta extraída da capa, seek, embaralhar, repetir, fila editável, letra em tela cheia e folha de qualidade.
 - **Qualidade real, não prometida.** O selo de qualidade vem do `Format`/`Tracks` do Media3, então o app mostra o que o decoder entregou de verdade — inclusive quando a fonte remota manda algo abaixo do pedido.
 - **Downloads offline** com progresso, retry, exclusão individual/total, limite por Wi-Fi e downloads inteligentes das próximas faixas.
-- **Letras `.lrc`** importadas pelo seletor de arquivos e salvas somente no armazenamento privado do app.
+- **Letras `.lrc`** importadas pelo seletor de arquivos e salvas no armazenamento privado do app, além do provedor SimpMusic Lyrics, com cache local e sincronia quando disponível.
+- **Provedores de letras** ativáveis individualmente. Por enquanto, apenas o SimpMusic Lyrics está disponível; novos provedores serão adicionados em breve.
 - **Modo Karaokê** com letra sincronizada, auto-scroll e palco animado nas cores da capa.
 - **Modo iPod clássico** com click wheel (toque por zonas + arrasto), menus de músicas/álbuns/artistas, tela "tocando agora" e visual retrô.
 - **Mix infinito** que continua a fila a partir de uma faixa ou do histórico recente.
@@ -66,6 +67,12 @@ Resposta de stream (texto puro com URL ou JSON):
 ```
 
 O token, quando preenchido, é enviado como `Authorization: Bearer ...` e `X-API-Key`.
+
+### Letras (SimpMusic Lyrics)
+
+Em **Ajustes → Provedores de letras**, cada provedor pode ser ativado ou desativado individualmente. Por enquanto, apenas **SimpMusic Lyrics** está disponível; novos provedores serão adicionados em breve.
+
+O provedor consulta `https://api-lyrics.simpmusic.org/v1` por ID de vídeo quando disponível e, caso contrário, busca por título e artista. Letras sincronizadas são preferidas. Os resultados são salvos em `files/lyrics`, ficam disponíveis offline e podem ser substituídos por um arquivo `.lrc` importado manualmente.
 
 ### Complementos lossless
 
@@ -180,7 +187,7 @@ A injeção de dependências é manual (`AppContainer`), a persistência usa Dat
 - **Discord** exige uma bridge em um computador, porque Rich Presence não é exposto a apps Android de terceiros.
 - **Qualidade lossless** depende da fonte. O app mostra a qualidade decodificada, mesmo que seja menor que a solicitada.
 - **Downloads** dependem das fontes configuradas; arquivos baixados ficam no armazenamento privado do app e não aparecem no gerenciador de arquivos do sistema.
-- **Letras** são importadas manualmente em `.lrc`; o app não baixa letras de serviços de terceiros.
+- **Letras** podem ser importadas manualmente em `.lrc` ou obtidas de provedores ativados. Por enquanto, apenas o SimpMusic Lyrics está disponível; novos provedores serão adicionados em breve.
 - O projeto não inclui catálogo, credenciais, chaves de API nem assinatura de produção.
 
 ## Legal

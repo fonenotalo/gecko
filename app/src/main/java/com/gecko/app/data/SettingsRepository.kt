@@ -7,9 +7,11 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.gecko.app.model.AppSettings
 import com.gecko.app.model.AudioQuality
+import com.gecko.app.model.DEFAULT_LYRICS_PROVIDERS
 import com.gecko.app.model.DEFAULT_YT_MUSIC_API
 import com.gecko.app.model.ThemeMode
 import com.gecko.app.model.ThemeStyle
@@ -35,6 +37,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     private fun Preferences.toAppSettings(): AppSettings {
+        val storedProviders = this[Keys.LYRICS_PROVIDERS]
         val storedApi = this[Keys.YT_MUSIC_URL].orEmpty().trim()
         val storedStream = this[Keys.YT_MUSIC_STREAM_URL].orEmpty().trim()
         val storedWasBridge = storedApi.isNotBlank() && !storedApi.isDirectYouTubeMusicApi()
@@ -67,6 +70,7 @@ class SettingsRepository(private val context: Context) {
             ytMusicUrl = apiUrl,
             ytMusicStreamUrl = streamUrl,
             ytMusicToken = this[Keys.YT_MUSIC_TOKEN].orEmpty(),
+            lyricsProviders = storedProviders ?: DEFAULT_LYRICS_PROVIDERS,
             scrobbleEnabled = this[Keys.SCROBBLE_ENABLED] ?: false,
             lastFmApiKey = this[Keys.LASTFM_API_KEY].orEmpty(),
             lastFmApiSecret = this[Keys.LASTFM_API_SECRET].orEmpty(),
@@ -94,6 +98,7 @@ class SettingsRepository(private val context: Context) {
         this[Keys.YT_MUSIC_URL] = settings.ytMusicUrl
         this[Keys.YT_MUSIC_STREAM_URL] = settings.ytMusicStreamUrl
         this[Keys.YT_MUSIC_TOKEN] = settings.ytMusicToken
+        this[Keys.LYRICS_PROVIDERS] = settings.lyricsProviders
         this[Keys.SCROBBLE_ENABLED] = settings.scrobbleEnabled
         this[Keys.LASTFM_API_KEY] = settings.lastFmApiKey
         this[Keys.LASTFM_API_SECRET] = settings.lastFmApiSecret
@@ -115,6 +120,7 @@ class SettingsRepository(private val context: Context) {
         val YT_MUSIC_URL = stringPreferencesKey("yt_music_url")
         val YT_MUSIC_STREAM_URL = stringPreferencesKey("yt_music_stream_url")
         val YT_MUSIC_TOKEN = stringPreferencesKey("yt_music_token")
+        val LYRICS_PROVIDERS = stringSetPreferencesKey("lyrics_providers")
         val SCROBBLE_ENABLED = booleanPreferencesKey("scrobble_enabled")
         val LASTFM_API_KEY = stringPreferencesKey("lastfm_api_key")
         val LASTFM_API_SECRET = stringPreferencesKey("lastfm_api_secret")

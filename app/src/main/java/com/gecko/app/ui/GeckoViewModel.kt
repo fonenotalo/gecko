@@ -15,6 +15,7 @@ import com.gecko.app.model.AlbumPalette
 import com.gecko.app.model.AppSettings
 import com.gecko.app.model.Artist
 import com.gecko.app.model.AudioQuality
+import com.gecko.app.model.LyricsProviderId
 import com.gecko.app.model.Track
 import com.gecko.app.model.TrackSource
 import com.gecko.app.playback.PlayerSnapshot
@@ -68,6 +69,8 @@ data class PlayerUiState(
     val current: Track? = null,
     val queue: List<Track> = emptyList(),
     val lyrics: Lyrics? = null,
+    val lyricsLoading: Boolean = false,
+    val lyricsError: String? = null,
     val palette: AlbumPalette? = null,
     val infiniteMix: Boolean = false,
 )
@@ -96,6 +99,8 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
 
     private val _queueTracks = MutableStateFlow<List<Track>>(emptyList())
     private val _lyrics = MutableStateFlow<Lyrics?>(null)
+    private val _lyricsLoading = MutableStateFlow(false)
+    private val _lyricsError = MutableStateFlow<String?>(null)
     private val _palette = MutableStateFlow<AlbumPalette?>(null)
     private val _infiniteMix = MutableStateFlow(false)
 
@@ -103,9 +108,11 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
         container.player.snapshot,
         _queueTracks,
         _lyrics,
+        _lyricsLoading,
+        _lyricsError,
         _palette,
         _infiniteMix,
-    ) { snapshot, queue, lyrics, palette, infinite ->
+    ) { snapshot, queue, lyrics, lyricsLoading, lyricsError, palette, infinite ->
         val current = snapshot.currentMediaId?.let { id -> queue.firstOrNull { it.id == id } }
             ?: queue.getOrNull(snapshot.index)
         PlayerUiState(
@@ -113,6 +120,8 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
             current = current,
             queue = queue,
             lyrics = lyrics,
+            lyricsLoading = lyricsLoading,
+            lyricsError = lyricsError,
             palette = palette,
             infiniteMix = infinite,
         )
@@ -299,9 +308,20 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
 
     private fun loadLyrics(track: Track) {
         lyricsJob?.cancel()
+        _lyrics.value = null
+        _lyricsLoading.value = true
+        _lyricsError.value = null
         lyricsJob = viewModelScope.launch {
-            val loaded = withContext(Dispatchers.IO) { container.lyrics.load(track.id) }
-            if (player.value.current?.id == track.id) _lyrics.value = loaded
+            val currentSettings = settings.value
+            val loaded = container.lyricsResolver.resolve(track, currentSettings)
+            if (player.value.current?.id != track.id) return@launch
+            _lyrics.value = loaded
+            _lyricsLoading.value = false
+            if (loaded == null && currentSettings.lyricsProviders.isNotEmpty()) {
+                _lyricsError.value =
+                    "Nenhum provedor ativo encontrou letra para esta faixa. " +
+                        "Você pode importar um arquivo .lrc."
+            }
         }
     }
 
@@ -709,7 +729,9 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
             val imported = container.lyrics.import(track.id, uri)
             if (imported) {
                 _lyrics.value = withContext(Dispatchers.IO) { container.lyrics.load(track.id) }
-                _messages.tryEmit("Letra sincronizada importada")
+                _lyricsLoading.value = false
+                _lyricsError.value = null
+                _messages.tryEmit("Letra importada")
             } else {
                 _messages.tryEmit("Não foi possível ler esse arquivo .lrc")
             }
@@ -719,8 +741,10 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
     fun removeLyrics() {
         val track = player.value.current ?: return
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { container.lyrics.delete(track.id) }
+            container.lyricsResolver.clearCached(track)
             _lyrics.value = null
+            _lyricsLoading.value = false
+            _lyricsError.value = null
         }
     }
 
@@ -791,6 +815,18 @@ class GeckoViewModel(private val app: GeckoApp) : ViewModel() {
 
     fun updateSettings(transform: (AppSettings) -> AppSettings) {
         viewModelScope.launch { container.settings.update(transform) }
+    }
+
+    fun setLyricsProviderEnabled(provider: LyricsProviderId, enabled: Boolean) {
+        val key = provider.storageKey
+        updateSettings { settings ->
+            val providers = if (enabled) {
+                settings.lyricsProviders + key
+            } else {
+                settings.lyricsProviders - key
+            }
+            settings.copy(lyricsProviders = providers)
+        }
     }
 
     fun testLastFmSession() {

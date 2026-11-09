@@ -84,6 +84,7 @@ fun KaraokeScreen(
     val accent = player.palette?.accentColor(dark) ?: scheme.tertiary
     val track = player.current
     val lyrics = player.lyrics
+    val lyricsLoading = player.lyricsLoading
     val snapshot = player.snapshot
 
     val importLauncher = rememberLauncherForActivityResult(
@@ -211,17 +212,29 @@ fun KaraokeScreen(
                     .weight(1f),
             ) {
                 if (lyrics == null) {
-                    EmptyState(
-                        title = "Cante junto",
-                        message = "Importe um arquivo .lrc com os tempos da letra. " +
-                            "A letra fica salva apenas neste aparelho.",
-                        icon = {
-                            Icon(Icons.Rounded.Mic, contentDescription = null, tint = accent)
-                        },
-                        actionLabel = "Importar .lrc",
-                        onAction = { importLauncher.launch(arrayOf("*/*")) },
-                        modifier = Modifier.align(Alignment.Center),
-                    )
+                    if (lyricsLoading) {
+                        EmptyState(
+                            title = "Buscando letra…",
+                            message = "O Gecko está consultando os provedores ativos para esta faixa.",
+                            icon = {
+                                Icon(Icons.Rounded.Mic, contentDescription = null, tint = accent)
+                            },
+                            modifier = Modifier.align(Alignment.Center),
+                        )
+                    } else {
+                        EmptyState(
+                            title = "Cante junto",
+                            message = "Nenhum provedor ativo encontrou letra. " +
+                                "Importe um arquivo .lrc com os tempos da letra; ele fica salvo " +
+                                "apenas neste aparelho.",
+                            icon = {
+                                Icon(Icons.Rounded.Mic, contentDescription = null, tint = accent)
+                            },
+                            actionLabel = "Importar .lrc",
+                            onAction = { importLauncher.launch(arrayOf("*/*")) },
+                            modifier = Modifier.align(Alignment.Center),
+                        )
+                    }
                 } else {
                     KaraokeLyrics(
                         lyrics = lyrics,

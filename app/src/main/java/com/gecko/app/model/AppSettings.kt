@@ -11,6 +11,20 @@ enum class ThemeStyle {
     CLASSIC_IPOD,
 }
 
+enum class LyricsProviderId(
+    val storageKey: String,
+    val title: String,
+    val subtitle: String,
+) {
+    SIMPMUSIC(
+        "simpmusic",
+        "SimpMusic Lyrics",
+        "Banco comunitário gratuito, com letras sincronizadas e pesquisa por título e artista",
+    ),
+}
+
+val DEFAULT_LYRICS_PROVIDERS: Set<String> = setOf(LyricsProviderId.SIMPMUSIC.storageKey)
+
 /**
  * The quality the user *asks for* when a remote source is used. The quality that
  * is actually decoded is always read from the player and shown as-is.
@@ -51,6 +65,7 @@ data class AppSettings(
     val ytMusicUrl: String = DEFAULT_YT_MUSIC_API,
     val ytMusicStreamUrl: String = "",
     val ytMusicToken: String = "",
+    val lyricsProviders: Set<String> = DEFAULT_LYRICS_PROVIDERS,
     val scrobbleEnabled: Boolean = false,
     val lastFmApiKey: String = "",
     val lastFmApiSecret: String = "",

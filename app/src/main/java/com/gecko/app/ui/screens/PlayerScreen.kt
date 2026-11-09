@@ -404,6 +404,8 @@ fun PlayerScreen(
         ) {
             LyricsSheetContent(
                 lyrics = player.lyrics,
+                lyricsLoading = player.lyricsLoading,
+                lyricsError = player.lyricsError,
                 positionMs = snapshot.positionMs,
                 onImport = {
                     showLyrics = false
@@ -751,6 +753,8 @@ private fun currentLineIndex(lines: List<LyricLine>, positionMs: Long): Int =
 @Composable
 private fun LyricsSheetContent(
     lyrics: Lyrics?,
+    lyricsLoading: Boolean,
+    lyricsError: String?,
     positionMs: Long,
     onImport: () -> Unit,
     onRemove: () -> Unit,
@@ -799,11 +803,33 @@ private fun LyricsSheetContent(
             }
         }
         Spacer(Modifier.height(6.dp))
-        if (lyrics == null) {
+        if (lyricsLoading && lyrics == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 36.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(
+                        color = scheme.primary,
+                        modifier = Modifier.size(32.dp),
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        text = "Buscando letra nos provedores ativos…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        } else if (lyrics == null) {
             EmptyState(
-                title = "Sem letra para esta faixa",
-                message = "Importe um arquivo .lrc para cante junto com a sincronia certa. " +
-                    "O arquivo fica salvo apenas neste aparelho.",
+                title = lyricsError?.let { "Letra não encontrada" } ?: "Sem letra para esta faixa",
+                message = lyricsError
+                    ?: "Nenhum provedor ativo encontrou letra. Você pode importar um arquivo " +
+                        ".lrc para cante junto com a sincronia certa.",
                 actionLabel = "Importar letra",
                 onAction = onImport,
             )
