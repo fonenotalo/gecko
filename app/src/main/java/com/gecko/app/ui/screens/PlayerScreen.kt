@@ -423,11 +423,11 @@ private fun DragHandle(color: Color, onClose: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(26.dp)
+            .height(42.dp)
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragEnd = {
-                        if (accumulated > 110f) onClose()
+                        if (accumulated > 80f) onClose()
                         accumulated = 0f
                     },
                     onDragCancel = { accumulated = 0f },

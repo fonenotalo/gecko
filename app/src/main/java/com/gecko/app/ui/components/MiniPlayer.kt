@@ -3,6 +3,7 @@ package com.gecko.app.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,10 +31,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,6 +55,7 @@ fun MiniPlayer(
 ) {
     val track = player.current ?: return
     val snapshot = player.snapshot
+    var swipeUpAmount by remember { mutableFloatStateOf(0f) }
     val fraction = if (snapshot.durationMs > 0) {
         (snapshot.positionMs.toFloat() / snapshot.durationMs).coerceIn(0f, 1f)
     } else {
@@ -59,7 +66,20 @@ fun MiniPlayer(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .clickable(onClick = onOpen),
+            .clickable(onClick = onOpen)
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = {
+                        if (swipeUpAmount <= -70f) {
+                            onOpen()
+                        }
+                        swipeUpAmount = 0f
+                    },
+                    onDragCancel = { swipeUpAmount = 0f },
+                ) { _, dragAmount ->
+                    swipeUpAmount += dragAmount
+                }
+            },
         shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.97f),
         border = BorderStroke(
