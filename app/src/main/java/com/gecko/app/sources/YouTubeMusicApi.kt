@@ -203,7 +203,7 @@ class YouTubeMusicApi(private val client: OkHttpClient) {
                 ),
             )
         }
-        val root = postWithClient(baseUrl, "player", extra, clientName, clientVersion) ?: return null
+        val root = postWithClient(baseUrl, "player", extra, clientName, clientVersion ?: "") ?: return null
         val details = root.optJSONObject("videoDetails")
         val status = root.optJSONObject("playabilityStatus")?.optString("status")
         val streaming = root.optJSONObject("streamingData")
